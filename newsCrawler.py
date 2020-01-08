@@ -1,11 +1,53 @@
 import requests
 from bs4 import BeautifulSoup
-import re
-naver_news_link = "https://news.naver.com/main/list.nhn?mode=LSD&mid=sec"
-section = ["100","101","102","103","104","105"]
+from tokenizer import tokenize
+import pymysql
 
+monthly_day = [31,28,31,30,31,30,31,31,30,31,30,31]
+monthly_day_leap = [31,29,31,30,31,30,31,31,30,31,30,31]
 
-def readOneNews(url):
+processedDB = {"host" : 'sp-articledb.clwrfz92pdul.ap-northeast-2.rds.amazonaws.com',"port":"3306","user":'admin',"password":"sogangsp","db":"article",'charset':'utf8'}
+rawDB = {"host" : 'article-raw-data.cnseysfqrlcj.ap-northeast-2.rds.amazonaws.com',"port":"3306","user":'admin',"password":"sogangsp","db":"article",'charset':'utf8'}
+
+proDBconnect = pymysql.connect(
+    host=processedDB["host"],
+    port =processedDB['port'],
+    user=processedDB['user'],
+    password=processedDB['password'],
+    db=processedDB['db'],
+    charset=processedDB['charset']
+                               )
+rawDBconnect =pymysql.connect(
+    host=rawDB["host"],
+    port=rawDB['port'],
+    user=rawDB['user'],
+    password=rawDB['password'],
+    db=rawDB['db'],
+    charset=rawDB['charset']
+)
+proCursor = proDBconnect.cursor()
+rawCursor = rawDBconnect.cursor()
+
+def save_to_DB(time,content,token,section):
+    insert_pro_sql = "INSERT INTO article (news,time,section) VALUES (%s,%s,%s)"
+    insert_raw_sql = "INSERT INTO article (news,time,section) VALUES (%s,%s,%s)"
+    proCursor.execute(insert_pro_sql,(token,time,section))
+    rawCursor.execute(insert_raw_sql,(content,time,section))
+    proDBconnect.commit()
+    rawDBconnect.commit()
+def timeChange(time):
+    afternoon = 0
+    if "오후" in time:
+        afternoon = 12
+    timeSplit = time.split('.')
+    returntime = timeSplit[0]+'-' + timeSplit[1]+'-' + timeSplit[2]+' '
+    hour_minute = timeSplit[-1].split(' ')[-1]
+    hour = int(hour_minute.split(':')[0]) + afternoon
+    minute = int(hour_minute.split(':')[0])
+    returntime = returntime + str(hour)+':'+str(minute)
+    return returntime
+
+def readOneNews(url,section):
     try:
         res = requests.get(url)
         soup = BeautifulSoup(res.content, 'html.parser')
@@ -16,21 +58,23 @@ def readOneNews(url):
         titleform = soup.find('h3',id="articleTitle")
         title = titleform.get_text()
         timeform = soup.find('span',{'class':'t11'})
-        time = timeform.get_text()
+        time = timeChange(timeform.get_text())
         contentform = soup.find('div',id="articleBodyContents")
         for ad in contentform.find_all('a'):
             ad.decompose()
         content = contentform.get_text()
+        content = title + content
         content = content.replace("// flash 오류를 우회하기 위한 함수 추가\nfunction _flash_removeCallback() {}", "")
         content = content.replace("\n"," ")
         content = content.replace("\t"," ")
         print(title,time,content)
-        return [title,time,content]
+        contentToken = tokenize(content)
+        #save_to_DB(time,content,contentToken,section)
     except:
         print("기사 원문을 따오는데 실패하였습니다.")
         return
 
-def readOneNewsList(url):
+def readOneNewsList(url,section):
     try:
         res = requests.get(url)
         soup = BeautifulSoup(res.content,'html.parser')
@@ -47,30 +91,70 @@ def readOneNewsList(url):
                 prenewsLink = newsLink
                 continue
             else:
-                readOneNews(newsLink)
+                readOneNews(newsLink,section)
                 prenewsLink = newsLink
                 articleList.append(newsLink)
     except:
         print("한 페이지의 기사 리스트에서 기사 접근에 실패하였습니다.")
     return articleList
 
-def readOneDayList(url):
+def readOneDayList(url,section):
     #url 예시 https://news.naver.com/main/list.nhn?mode=LSD&mid=sec&sid1=104&date=20200106&page=
     pageNum = 1
     try:
         prevdayList = []
-        dayList = readOneNewsList(url+str(pageNum))
+        dayList = readOneNewsList(url+str(pageNum),section)
         while prevdayList != dayList:
+            print("page : " + str(pageNum))
             pageNum = pageNum + 1
             prevdayList = dayList
-            dayList = readOneNewsList(url+str(pageNum))
-            print("page : " + str(pageNum))
+            dayList = readOneNewsList(url+str(pageNum),section)
     except:
         print("하루치 기사 크롤링에 실패하였습니다.")
         print("실패한 페이지 : " + str(pageNum))
 
 
+def readOneYearList(section,year):
+    naverNewsLink = "https://news.naver.com/main/list.nhn?mode=LSD&mid=sec&sid1="
+    appendPageVar = "&page="
+    sectionId = {"정치" : "100","경제":"101","사회": "102", "생활/문화":"103", "세계":"104","IT/과학": "105"}
+    naverNewsLink = naverNewsLink+sectionId[section]+"&date="
+    if year%4 == 0:
+        month = 1
+        for mon in monthly_day_leap:
+            day = 1
+            while day <= mon:
 
-readOneNews('https://news.naver.com/main/read.nhn?mode=LSD&mid=sec&sid1=100&oid=056&aid=0010780168')
-readOneNewsList('https://news.naver.com/main/list.nhn?mode=LSD&mid=sec&sid1=104&date=20200106')
-readOneDayList('https://news.naver.com/main/list.nhn?mode=LSD&mid=sec&sid1=100&date=20200107&page=')
+                if month < 10:
+                    month_string = str('0'+month)
+                else:
+                    month_string = str(month)
+                if day < 10:
+                    day_string = str('0'+day)
+                else:
+                    day_string = str(day)
+                print(year+month_string+day_string)
+                readOneDayList(naverNewsLink+str(year)+month_string+day_string+appendPageVar,section)
+            month = month + 1
+    else :
+        month = 1
+        for mon in monthly_day:
+            day = 1
+            while day <= mon:
+
+                if month < 10:
+                    month_string = str('0' + str(month))
+                else:
+                    month_string = str(month)
+                if day < 10:
+                    day_string = str('0' + str(day))
+                else:
+                    day_string = str(day)
+                print(str(year) + month_string + day_string)
+                readOneDayList(naverNewsLink +str(year)+ month_string + day_string + appendPageVar),section
+            month = month + 1
+#https://news.naver.com/main/list.nhn?mode=LSD&mid=sec&sid1=104&date=20190229&page=3
+#readOneNews('https://news.naver.com/main/read.nhn?mode=LSD&mid=sec&sid1=100&oid=056&aid=0010780168')
+#readOneNewsList('https://news.naver.com/main/list.nhn?mode=LSD&mid=sec&sid1=104&date=20200106')
+#readOneDayList('https://news.naver.com/main/list.nhn?mode=LSD&mid=sec&sid1=100&date=20200107&page=')
+#readOneYearList("경제",2018)
