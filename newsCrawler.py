@@ -54,7 +54,7 @@ def timeChange(time):
     hour = int(hour_minute.split(':')[0]) + afternoon
     if hour == 24 and "오후" in time:
         hour = 12
-    minute = int(hour_minute.split(':')[0])
+    minute = int(hour_minute.split(':')[1])
     returntime = returntime + str(hour)+':'+str(minute)
     returntime = datetime.strptime(returntime,'%Y-%m-%d %H:%M')
     return returntime
