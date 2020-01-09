@@ -80,10 +80,10 @@ def readOneNews(url,section):
         content = content.replace("// flash 오류를 우회하기 위한 함수 추가\nfunction _flash_removeCallback() {}", "")
         content = content.replace("\n"," ")
         content = content.replace("\t"," ")
-        print(title,time,content)
+        #print(title,time,content)
         #contentToken = tokenize(content)
         #print(contentToken)
-        #save_to_DB(time,content,section)
+        save_to_DB(time,content,section)
     except KeyboardInterrupt as e:
         sys.exit()
     except Exception as e:
