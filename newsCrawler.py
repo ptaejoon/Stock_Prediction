@@ -153,14 +153,14 @@ def readOneYearList(section,year,half_year): #half_year 1:1~6, 2:7~12
             while day <= mon:
 
                 if month < 10:
-                    month_string = str('0'+month)
+                    month_string = str('0'+str(month))
                 else:
                     month_string = str(month)
                 if day < 10:
-                    day_string = str('0'+day)
+                    day_string = str('0'+str(day))
                 else:
                     day_string = str(day)
-                print(year+month_string+day_string)
+                print(str(year)+month_string+day_string)
                 readOneDayList(naverNewsLink+str(year)+month_string+day_string+appendPageVar,section)
                 day = day + 1
             month = month + 1
