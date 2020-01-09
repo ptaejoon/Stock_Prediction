@@ -80,10 +80,10 @@ def readOneNews(url,section):
         content = content.replace("// flash 오류를 우회하기 위한 함수 추가\nfunction _flash_removeCallback() {}", "")
         content = content.replace("\n"," ")
         content = content.replace("\t"," ")
-        #print(title,time,content)
+        print(title,time,content)
         #contentToken = tokenize(content)
         #print(contentToken)
-        save_to_DB(time,content,section)
+        #save_to_DB(time,content,section)
     except KeyboardInterrupt as e:
         sys.exit()
     except Exception as e:
@@ -136,14 +136,19 @@ def readOneDayList(url,section):
         print("실패한 페이지 : " + str(pageNum))
 
 
-def readOneYearList(section,year):
+def readOneYearList(section,year,half_year): #half_year 1:1~6, 2:7~12
     naverNewsLink = "https://news.naver.com/main/list.nhn?mode=LSD&mid=sec&sid1="
     appendPageVar = "&page="
     sectionId = {"정치" : "100","경제":"101","사회": "102", "생활/문화":"103", "세계":"104","IT/과학": "105"}
     naverNewsLink = naverNewsLink+sectionId[section]+"&date="
     if year%4 == 0:
-        month = 1
-        for mon in monthly_day_leap:
+        if half_year == 1:
+            half_month_leap = monthly_day_leap[:5]
+            month = 1
+        else :
+            half_month_leap = monthly_day_leap[6:]
+            month = 7
+        for mon in half_month_leap:
             day = 1
             while day <= mon:
 
@@ -160,8 +165,14 @@ def readOneYearList(section,year):
                 day = day + 1
             month = month + 1
     else :
-        month = 1
-        for mon in monthly_day:
+        if half_year == 1:
+            half_month = monthly_day[:5]
+            month = 1
+        else:
+            half_month = monthly_day[6:]
+            month = 7
+        print(half_month)
+        for mon in half_month:
             day = 1
             while day <= mon:
 
@@ -181,5 +192,4 @@ def readOneYearList(section,year):
 #readOneNews('https://news.naver.com/main/read.nhn?mode=LSD&mid=sec&sid1=100&oid=056&aid=0010780168',"정치")
 #readOneNewsList('https://news.naver.com/main/list.nhn?mode=LSD&mid=sec&sid1=104&date=20200106')
 #readOneDayList('https://news.naver.com/main/list.nhn?mode=LSD&mid=sec&sid1=100&date=20200107&page=')
-readOneYearList("경제",2018)
-
+#readOneYearList("경제",2017,1)
