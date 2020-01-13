@@ -9,10 +9,10 @@ from bs4 import BeautifulSoup
 #from tokenizer import tokenize
 import pymysql
 import sys
-from datetime import datetime
+from datetime import datetime,timedelta
 monthly_day = [31,28,31,30,31,30,31,31,30,31,30,31]
 monthly_day_leap = [31,29,31,30,31,30,31,31,30,31,30,31]
-'''
+
 processedDB = {"host" : 'sp-articledb.clwrfz92pdul.ap-northeast-2.rds.amazonaws.com',"port":3306,"user":'admin',"password":"sogangsp","db":"mydb",'charset':'utf8'}
 rawDB = {"host" : 'article-raw-data.cnseysfqrlcj.ap-northeast-2.rds.amazonaws.com',"port":3306,"user":'admin',"password":"sogangsp","db":"mydb",'charset':'utf8'}
 
@@ -50,7 +50,7 @@ def save_to_DB(time,content,section):
         #print("i worked")
     except Exception as e:
         print(e)
-'''        
+
 def timeChange(time):
     afternoon = 0
     if "오후" in time:
@@ -64,10 +64,10 @@ def timeChange(time):
     minute = int(hour_minute.split(':')[1])
     returntime = returntime + str(hour)+':'+str(minute)
     returntime = datetime.strptime(returntime,'%Y-%m-%d %H:%M')
-    print(type(returntime))
+    #print(type(returntime))
     return returntime
 
-def readOneNews(url,section):
+def readOneNews(url,section,day):
     try:
         res = requests.get(url)
         soup = BeautifulSoup(res.content, 'html.parser')
@@ -80,6 +80,24 @@ def readOneNews(url,section):
         title = titleform.get_text()
         timeform = soup.find('span',{'class':'t11'})
         time = timeChange(timeform.get_text())
+        t_year = time.year
+        t_month = time.month
+        t_day = time.day
+
+        today = datetime(t_year, t_month, t_day, 9, 0, 0, 0) #기사 작성날의 9시
+        yesterday = today - timedelta(days=1) #기사 작성날의 전날 9시
+        if day is "today":
+            if time < today:
+                print("Crawl")
+            else:
+                print("수집하려는 시간과 맞지 않습니다.")
+                return
+        else :
+            if time > yesterday:
+                print("Crawl")
+            else:
+                print("수집하려는 시간과 맞지 않습니다.")
+                return
         contentform = soup.find('div',id="articleBodyContents")
         for ad in contentform.find_all('a'):
             ad.decompose()
@@ -92,20 +110,8 @@ def readOneNews(url,section):
         #contentToken = tokenize(content)
         #print(contentToken)
        
-        
-            #save_to_DB(time,content,section)
-        t_year = time.year
-        t_month = time.month
-        t_day = time.day
-        
-        now = datetime.now() # 이걸로 조건을 바꿔서 하면 됨. 
-        
-        if time > datetime(t_year, t_month, t_day, 9, 0, 0):
-            print(time)
-            print(content)
-        else :
-            sys.exit()
-        
+        save_to_DB(time,content,section)
+
     except KeyboardInterrupt as e:
         sys.exit()
     except Exception as e:
@@ -113,7 +119,7 @@ def readOneNews(url,section):
         print(e)
         return
 
-def readOneNewsList(url,section):
+def readOneNewsList(url,section,day):
     try:
         res = requests.get(url)
         soup = BeautifulSoup(res.content,'html.parser')
@@ -133,116 +139,61 @@ def readOneNewsList(url,section):
                 prenewsLink = newsLink
                 continue
             else:
-                readOneNews(newsLink,section)
+                readOneNews(newsLink,section,day)
                 prenewsLink = newsLink
                 articleList.append(newsLink)
     except:
         print("한 페이지의 기사 리스트에서 기사 접근에 실패하였습니다.")
     return articleList
 
-def readOneDayList(url,section):
+def readOneDayList(url,section,day):
     #url 예시 https://news.naver.com/main/list.nhn?mode=LSD&mid=sec&sid1=104&date=20200106&page=
     pageNum = 1
     try:
         prevdayList = []
-        dayList = readOneNewsList(url+str(pageNum),section)
+        dayList = readOneNewsList(url+str(pageNum),section,day)
         while prevdayList != dayList:
             print("page : " + str(pageNum))
             pageNum = pageNum + 1
             prevdayList = dayList
-            dayList = readOneNewsList(url+str(pageNum),section)
+            dayList = readOneNewsList(url+str(pageNum),section,day)
     except KeyboardInterrupt:
         sys.exit()
-    except:
+    except Exception as e:
         print("하루치 기사 크롤링에 실패하였습니다.")
         print("실패한 페이지 : " + str(pageNum))
+        print(e)
     
-    
+today = datetime.now()
+yesterday = today-timedelta(days=1)
+if today.month < 10:
+    month_string = str('0' + str(today.month))
+else:
+    month_string = str(today.month)
+today_link = str(today.year)+str(month_string)
 
+if yesterday.month < 10:
+    month_string = str('0' + str(yesterday.month))
+else:
+    month_string = str(yesterday.month)
+yesterday_link = str(yesterday.year)+str(month_string)
 
-def readOneYearList(section,year,half_year): #half_year 1:1~6, 2:7~12
-    naverNewsLink = "https://news.naver.com/main/list.nhn?mode=LSD&mid=sec&sid1="
-    appendPageVar = "&page="
-    sectionId = {"정치" : "100","경제":"101","사회": "102", "생활/문화":"103", "세계":"104","IT/과학": "105"}
-    naverNewsLink = naverNewsLink+sectionId[section]+"&date="
-    if year%4 == 0:
-        if half_year == 1:
-            half_month_leap = monthly_day_leap[:5]
-            month = 1
-        else :
-            half_month_leap = monthly_day_leap[6:]
-            month = 7
-        for mon in half_month_leap:
-            day = 1
-            while day <= mon:
+if today.day < 10:
+    day_string = str('0' + str(today.day))
+else:
+    day_string = str(today.day)
+today_link = today_link+str(day_string)
 
-                if month < 10:
-                    month_string = str('0'+str(month))
-                else:
-                    month_string = str(month)
-                if day < 10:
-                    day_string = str('0'+str(day))
-                else:
-                    day_string = str(day)
-                print(str(year)+month_string+day_string)
-                readOneDayList(naverNewsLink+str(year)+month_string+day_string+appendPageVar,section)
-                day = day + 1
-            month = month + 1
-    else :
-        if half_year == 1:
-            half_month = monthly_day[:5]
-            month = 1
-        else:
-            half_month = monthly_day[6:]
-            month = 7
-        print(half_month)
-        for mon in half_month:
-            day = 1
-            while day <= mon:
+if yesterday.day < 10:
+    day_string = str('0' + str(yesterday.day))
+else:
+    day_string = str(yesterday.day)
+yesterday_link = yesterday_link+str(day_string)
+print(today_link)
+print(yesterday_link)
+readOneDayList('https://news.naver.com/main/list.nhn?mode=LSD&mid=sec&sid1=100&date='+today_link+'&page=',"경제",'today')
+readOneDayList('https://news.naver.com/main/list.nhn?mode=LSD&mid=sec&sid1=100&date='+yesterday_link+'&page=',"경제",'yesterday')
 
-                if month < 10:
-                    month_string = str('0' + str(month))
-                else:
-                    month_string = str(month)
-                if day < 10:
-                    day_string = str('0' + str(day))
-                else:
-                    day_string = str(day)
-                print(str(year) + month_string + day_string)
-                readOneDayList(naverNewsLink +str(year)+ month_string + day_string + appendPageVar,section)
-                day = day + 1
-            month = month + 1
-#https://news.naver.com/main/list.nhn?mode=LSD&mid=sec&sid1=104&date=20190229&page=3
-#readOneNews('https://news.naver.com/main/read.nhn?mode=LSD&mid=sec&sid1=100&oid=056&aid=0010780168',"경제")
-#readOneNewsList('https://news.naver.com/main/list.nhn?mode=LSD&mid=sec&sid1=104&date=20200111',"경제")
-readOneDayList('https://news.naver.com/main/list.nhn?mode=LSD&mid=sec&sid1=100&date=20200111&page=',"경제")
-#readOneYearList("경제",2017,1)
-
-
-# In[48]:
-
-
-import datetime
-
-
-# In[57]:
-
-
-now = datetime.datetime.now()
-period = datetime.timedelta(days=1)
-
-t_diff = now - period
-
-# 8시 기준 크롤링
-
-t1 = datetime.datetime(2020, 1, 11, 9, 53, 0)
-
-print(t_diff)
-print(t1)
-t_diff < t1
-
-
-# In[ ]:
 
 
 
