@@ -188,6 +188,26 @@ def readOneYearList(section,year,half_year): #half_year 1:1~6, 2:7~12
                 readOneDayList(naverNewsLink +str(year)+ month_string + day_string + appendPageVar,section)
                 day = day + 1
             month = month + 1
+
+def readOneMonthList(section,year,month): #half_year 1:1~6, 2:7~12
+    naverNewsLink = "https://news.naver.com/main/list.nhn?mode=LSD&mid=sec&sid1="
+    appendPageVar = "&page="
+    sectionId = {"정치" : "100","경제":"101","사회": "102", "생활/문화":"103", "세계":"104","IT/과학": "105"}
+    naverNewsLink = naverNewsLink+sectionId[section]+"&date="
+    day = 1
+    while day <= monthly_day[month-1]:
+        if month < 10:
+            month_string = '0'+str(month)
+        else:
+            month_string = str(month)
+        if day < 10:
+            day_string = '0'+str(day)
+        else:
+            day_string = str(day)
+        print(str(year)+month_string+day_string)
+        readOneDayList(naverNewsLink+str(year)+month_string+day_string+appendPageVar,section)
+        day = day + 1
+
 #https://news.naver.com/main/list.nhn?mode=LSD&mid=sec&sid1=104&date=20190229&page=3
 #readOneNews('https://news.naver.com/main/read.nhn?mode=LSD&mid=sec&sid1=100&oid=056&aid=0010780168',"정치")
 #readOneNewsList('https://news.naver.com/main/list.nhn?mode=LSD&mid=sec&sid1=104&date=20200106')
