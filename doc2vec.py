@@ -1,5 +1,7 @@
+import time
 import os
 import gensim
+
 # Set file names for train and test data
 test_data_dir = os.path.join('/home', 'eunwoo', 'Desktop')
 lee_train_file = os.path.join(test_data_dir, 'traindata.csv')
@@ -27,13 +29,15 @@ def read_corpus(fname, tokens_only=False):
                 # For training data, add tags
                 yield gensim.models.doc2vec.TaggedDocument(tokens, [i])
 
+start_time = time.time()
 train_corpus = list(read_corpus(lee_train_file))
 test_corpus = list(read_corpus(lee_test_file, tokens_only=True))
+print("khaii time : ", time.time() - start_time)
 
 # Let's take a look at the training corpus
 #print(train_corpus[:2])
 #print(test_corpus[:2])
-
+start_time = time.time()
 model = gensim.models.doc2vec.Doc2Vec(vector_size=52, min_count=2, epochs=40)
 model.build_vocab(train_corpus)
 
@@ -72,3 +76,5 @@ sims = model.docvecs.most_similar([inferred_vector], topn=len(model.docvecs))
 print('Test Document ({}): «{}»\n'.format(doc_id, ' '.join(test_corpus[doc_id])))
 print(u'SIMILAR/DISSIMILAR DOCS PER MODEL %s:\n' % model)
 print(u'%s %s: «%s»\n' % ('MOST', sims[0], ' '.join(train_corpus[sims[0][0]].words)))
+
+print("model time : ", time.time() - start_time)
