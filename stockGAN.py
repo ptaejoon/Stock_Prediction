@@ -2,7 +2,7 @@ import keras
 from keras import layers
 from pandas import DataFrame
 
-class GAN:
+class GAN():
     def __init__(self,paragraph_vector,stock_index):
         #LSTM Input : (1000+1024)*1
         #LSTM Output : (1000)
@@ -30,7 +30,6 @@ class GAN:
         past_stock = keras.Input(shape=(self.gen_feature*(self.gen_timestep-1)),name='past_stock')
         combined_stock = keras.layers.concatenate([past_stock,gen_stock])
         valid = self.discriminator(combined_stock)
-
         self.combined = keras.Model(combined_stock,valid)
         self.combined.compile(loss='binary_crossentropy',optimizer=keras.optimizers.Adam(0.0002,0.5))
 
@@ -75,10 +74,21 @@ class GAN:
             print("!")
             #------------
             #train Discriminator
+
             #------------
 
+
             #----------------
+            #load stock data
+            #load paragraph vector
+            #gen_loss = self.generator.train_on_batch(,)
             #train Generator
             #self.generator.predict_on_batch(self,)
 
             #---------------
+    def predict(self,today):
+        return self.generator.predict(today)
+
+if __name__ == '__main__':
+    gan = GAN(paragraph_vector=,stock_index=)
+    gan.train(epochs=50,batch_size=128,save_interval=50)
