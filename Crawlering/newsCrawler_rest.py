@@ -9,7 +9,7 @@ monthly_day_leap = [31,29,31,30,31,30,31,31,30,31,30,31]
 
 processedDB = {"host" : 'sp-articledb.clwrfz92pdul.ap-northeast-2.rds.amazonaws.com',"port":3306,"user":'admin',"password":"sogangsp","db":"mydb",'charset':'utf8'}
 rawDB = {"host" : 'article-raw-data.cnseysfqrlcj.ap-northeast-2.rds.amazonaws.com',"port":3306,"user":'admin',"password":"sogangsp","db":"mydb",'charset':'utf8'}
-rawDB = {"host" : 'restdb.cpyq4vywsjh3.ap-northeast-2.rds.amazonaws.com',"port":3306,"user":'admin',"password":"sogangsp","db":"innodb",'charset':'utf8'}
+restDB = {"host" : 'restdb.cpyq4vywsjh3.ap-northeast-2.rds.amazonaws.com',"port":3306,"user":'admin',"password":"sogangsp","db":"innodb",'charset':'utf8'}
 """proDBconnect = pymysql.connect(
     host=processedDB["host"],
     port =processedDB['port'],
@@ -28,12 +28,12 @@ rawDB = {"host" : 'restdb.cpyq4vywsjh3.ap-northeast-2.rds.amazonaws.com',"port":
     charset=rawDB['charset']
 )"""
 restDBconnect = pymysql.connect(
-    host=processedDB["host"],
-    port =processedDB['port'],
-    user=processedDB['user'],
-    password=processedDB['password'],
-    db=processedDB['db'],
-    charset=processedDB['charset']
+    host=restDB["host"],
+    port =restDB['port'],
+    user=restDB['user'],
+    password=restDB['password'],
+    db=restDB['db'],
+    charset=restDB['charset']
                                )
 
 #proCursor = proDBconnect.cursor()
@@ -43,12 +43,12 @@ def save_to_DB(time,content,section):
     try:
         #insert_pro_sql = """INSERT INTO article(news, writetime,section) VALUES ( %s, %s, %s )"""
         #insert_raw_sql = """INSERT INTO article(news, writetime,section) VALUES ( %s, %s, %s )"""
-        insert_rest_sql = """INSERT INTO article(news, writetime,section) VALUES ( %s, %s, %s )"""
+        insert_rest_sql = """INSERT INTO a2019_1(news, writetime,section) VALUES ( %s, %s, %s )"""
         #print(token)
         #print(time)
         #print(section)
         #proCursor.execute(insert_pro_sql,(content,time,section))
-        restDBconnect.execute(insert_rest_sql,(content,time,section))
+        restCursor.execute(insert_rest_sql,(content,time,section))
         #rawCursor.execute(insert_raw_sql,(content,time,section))
         #proDBconnect.commit()
         #rawDBconnect.commit()
@@ -66,7 +66,7 @@ def timeChange(time):
     hour = int(hour_minute.split(':')[0]) + afternoon
     if hour == 24 and "오후" in time:
         hour = 12
-    else:
+    elif hour == 12 and "오전" in time:
         hour = '00'
     minute = int(hour_minute.split(':')[1])
     returntime = returntime + str(hour)+':'+str(minute)
@@ -230,7 +230,7 @@ readOneDayList('https://news.naver.com/main/list.nhn?mode=LSD&mid=sec&sid1=101&d
 readOneDayList('https://news.naver.com/main/list.nhn?mode=LSD&mid=sec&sid1=101&date=20190628&page=','경제')
 readOneDayList('https://news.naver.com/main/list.nhn?mode=LSD&mid=sec&sid1=101&date=20190629&page=','경제')
 readOneDayList('https://news.naver.com/main/list.nhn?mode=LSD&mid=sec&sid1=101&date=20190630&page=','경제')
-
+"""
 for num in range(250,296):
     readOneNewsList('https://news.naver.com/main/list.nhn?mode=LSD&mid=sec&sid1=101&date=20151221&page='+str(num),"경제")
 readOneDayList('https://news.naver.com/main/list.nhn?mode=LSD&mid=sec&sid1=101&date=20191222&page=','경제')
@@ -243,7 +243,7 @@ readOneDayList('https://news.naver.com/main/list.nhn?mode=LSD&mid=sec&sid1=101&d
 readOneDayList('https://news.naver.com/main/list.nhn?mode=LSD&mid=sec&sid1=101&date=20191229&page=','경제')
 readOneDayList('https://news.naver.com/main/list.nhn?mode=LSD&mid=sec&sid1=101&date=20191230&page=','경제')
 readOneDayList('https://news.naver.com/main/list.nhn?mode=LSD&mid=sec&sid1=101&date=20191231&page=','경제')
-
+"""
 
 #https://news.naver.com/main/list.nhn?mode=LSD&mid=sec&sid1=104&date=20190229&page=3
 #readOneNews('https://news.naver.com/main/read.nhn?mode=LSD&mid=sec&sid1=100&oid=056&aid=0010780168',"정치")
