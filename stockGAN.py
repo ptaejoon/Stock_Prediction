@@ -95,7 +95,7 @@ class GAN():
     def predict(self, today):  # y hat
         return self.generator.predict(today)
 
-
+"""
 processedDB = {"host": 'sp-articledb.clwrfz92pdul.ap-northeast-2.rds.amazonaws.com', "port": 3306, "user": 'admin',
                "password": "sogangsp", "db": "mydb", 'charset': 'utf8'}
 rawDB = {"host": 'article-raw-data.cnseysfqrlcj.ap-northeast-2.rds.amazonaws.com', "port": 3306, "user": 'admin',
@@ -123,4 +123,6 @@ oddCursor = oddDBconnect.cursor()
 
 
 def companySelection():
-    company_list_sql = "select distinct corp_name from CORP_STOCK where TRADE_TIME < '2010-01-05 00:00:00.000'"
+    company_list_sql = select distinct corp_name from CORP_STOCK where TRADE_TIME < '2010-01-05 00:00:00.000'
+    
+"""
