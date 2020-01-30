@@ -1,13 +1,14 @@
 import time
 import os
 import gensim
+from khaiii import KhaiiiApi
+import pymysql
 
 # Set file names for train and test data
 test_data_dir = os.path.join('/home', 'eunwoo', 'Desktop')
 lee_train_file = os.path.join(test_data_dir, 'traindata.csv')
 lee_test_file = os.path.join(test_data_dir, 'testdata.csv')
 
-from khaiii import KhaiiiApi
 def tokenize(sentence):
 	token = []
 	khaii = KhaiiiApi()
@@ -29,20 +30,37 @@ def read_corpus(fname, tokens_only=False):
                 # For training data, add tags
                 yield gensim.models.doc2vec.TaggedDocument(tokens, [i])
 
-start_time = time.time()
-train_corpus = list(read_corpus(lee_train_file))
-test_corpus = list(read_corpus(lee_test_file, tokens_only=True))
-print("khaii time : ", time.time() - start_time)
+conn = pymysql.connect(host='sp-articledb.clwrfz92pdul.ap-northeast-2.rds.amazonaws.com', user = 'admin', password='sogangsp', db='mydb', charset='utf8', port=3306)
+curs = conn.cursor()
+sql = "select news from article where newsid between 0 and 10000"
+curs.execute(sql)
+rows = curs.fetchall()
+arr = dict()
+train_corpus = []
+test_corpus = []
 
-# Let's take a look at the training corpus
-#print(train_corpus[:2])
-#print(test_corpus[:2])
-start_time = time.time()
-model = gensim.models.doc2vec.Doc2Vec(vector_size=52, min_count=2, epochs=40)
-model.build_vocab(train_corpus)
+for index, row in enumerate(rows) :
+    try:
+        tokens = tokenize(row[0])
+        for token in tokens:
+            if token in arr:
+                arr[token] += 1
+            else:
+                arr[token] = 1
+    except KeyboardInterrupt:
+        exit()
+    except:
+        print("Khaiii has problem")
+        continue
 
-model.train(train_corpus, total_examples=model.corpus_count, epochs=model.epochs)
+conn.close()
 
+model = gensim.models.doc2vec.Doc2Vec(vector_size=792, min_count=2, epochs=40)
+model.build_vocab_from_freq(arr, update = True)
+
+#model.train(train_corpus, total_examples=model.corpus_count, epochs=model.epochs)
+model.save("vovab_10")
+'''
 ranks = []
 second_ranks = []
 for doc_id in range(len(train_corpus)):
@@ -77,4 +95,8 @@ print('Test Document ({}): «{}»\n'.format(doc_id, ' '.join(test_corpus[doc_id]
 print(u'SIMILAR/DISSIMILAR DOCS PER MODEL %s:\n' % model)
 print(u'%s %s: «%s»\n' % ('MOST', sims[0], ' '.join(train_corpus[sims[0][0]].words)))
 
+start_time = time.time()
 print("model time : ", time.time() - start_time)
+
+#model.save("doc2vec.model")
+'''
