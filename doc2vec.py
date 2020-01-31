@@ -3,63 +3,73 @@ import os
 import gensim
 from khaiii import KhaiiiApi
 import pymysql
+import time
 
 # Set file names for train and test data
-test_data_dir = os.path.join('/home', 'eunwoo', 'Desktop')
-lee_train_file = os.path.join(test_data_dir, 'traindata.csv')
-lee_test_file = os.path.join(test_data_dir, 'testdata.csv')
 
+
+khaii = KhaiiiApi()
+word_class = ['NNG', 'NNP', 'NNB', 'NR', 'VV', 'VA', 'VX', 'VCP', 'VCN', 'MM', 'MAG', 'MAJ', 'IC', 'XPN', 'XSN', 'XSV', 'XSA', 'XR', 'SN']
 def tokenize(sentence):
-	token = []
-	khaii = KhaiiiApi()
-	word_class = ['NNG', 'NNP', 'NNB', 'NR', 'VV', 'VA', 'VX', 'VCP', 'VCN', 'MM', 'MAG', 'MAJ', 'IC', 'XPN', 'XSN', 'XSV', 'XSA', 'XR', 'SN']
-	for word in khaii.analyze(sentence):
-		for morph in word.morphs:
-			if morph.tag in word_class:
-				token.append(morph.lex)
-	return token
+    token = []
+    for word in khaii.analyze(sentence):
+        for morph in word.morphs:
+            if morph.tag in word_class:
+                token.append(morph.lex)
+    return token
 
-import smart_open
-def read_corpus(fname, tokens_only=False):
-    with smart_open.open(fname, encoding="utf-8") as f:
-        for i, line in enumerate(f):
-            tokens = tokenize(line)
-            if tokens_only:
-                yield tokens
-            else:
-                # For training data, add tags
-                yield gensim.models.doc2vec.TaggedDocument(tokens, [i])
-
-conn = pymysql.connect(host='sp-articledb.clwrfz92pdul.ap-northeast-2.rds.amazonaws.com', user = 'admin', password='sogangsp', db='mydb', charset='utf8', port=3306)
+conn = pymysql.connect(host='localhost', user = 'sinunu', password='1q2w3e4r', db='mydb', charset='utf8')
 curs = conn.cursor()
-sql = "select news from article where newsid between 0 and 10000"
-curs.execute(sql)
-rows = curs.fetchall()
-arr = dict()
-train_corpus = []
-test_corpus = []
 
-for index, row in enumerate(rows) :
-    try:
-        tokens = tokenize(row[0])
-        for token in tokens:
-            if token in arr:
-                arr[token] += 1
-            else:
-                arr[token] = 1
-    except KeyboardInterrupt:
-        exit()
-    except:
-        print("Khaiii has problem")
-        continue
+model = gensim.models.doc2vec.Doc2Vec.load('vocab_20.model')
 
+#even_article table start
+print("even_article start")
+for i in range(1, 680):
+    sql = "select news from even_article where newsid between " + str(i*10000) + " and " + str( (i+1)*10000-1)
+    curs.execute(sql)
+    rows = curs.fetchall()
+    arr = []
+    for index, row in enumerate(rows):
+        try:
+            tokens = tokenize(row[0])
+            #tokens = gensim.utils.simple_preprocess(row[0])
+            arr.append(gensim.models.doc2vec.TaggedDocument(tokens, [i*10000+index]))
+        except KeyboardInterrupt:
+            exit()
+        except:
+            print("Khaiii has problem")
+            continue
+    model.build_vocab(arr, update = True)
+    model.save("vocab_20.model")
+    print("even article", i*10000, "~", (i+1)*10000-1, "finish")
+
+#odd_article table start
+print("odd_article start")
+for i in range(700):
+    sql = "select news from odd_article where newsid between " + str(i*10000) + " and " + str( (i+1)*10000-1)
+    curs.execute(sql)
+    rows = curs.fetchall()
+    arr = []
+    for index, row in enumerate(rows) :
+        try:
+            tokens = tokenize(row[0])
+            arr.append(gensim.models.doc2vec.Doc2Vec.TaggedDocument(tokens,[i*10000+index]))
+        except KeyboardInterrupt:
+            exit()
+        except:
+            print("Khaiii has problem")
+            continue
+    model.build_vocab(arr, update = True)
+    model.save("vocab_20.model")
+    print("odd article", i*10000, "~", (i+1)*10000-1, "finish")
+
+print("job's done")
 conn.close()
 
-model = gensim.models.doc2vec.Doc2Vec(vector_size=792, min_count=2, epochs=40)
-model.build_vocab_from_freq(arr, update = True)
-
 #model.train(train_corpus, total_examples=model.corpus_count, epochs=model.epochs)
-model.save("vovab_10")
+
+
 '''
 ranks = []
 second_ranks = []
