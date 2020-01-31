@@ -31,20 +31,20 @@ def revise12Time(even = False):
     evenYear = [2010,2012,2014,2016,2018]
     oddYear = [2011,2013,2015,2017,2019]
     if even is True:
-        for year in oddYear:
+        for year in evenYear:
             if year % 4 == 0:
                 present_month = 1
                 for month in monthly_day_leap:
-                    for day in len(1,month+1):
+                    for day in range(1,month+1):
                         year_string = str(year) + '-' + str(present_month) + '-' + str(day)
-                        print(year_string)
+                        reviseDB(year_string)
                     present_month = present_month + 1
             else:
                 present_month = 1
                 for month in monthly_day:
                     for day in range(1,month+1):
                         year_string = str(year) + '-' + str(present_month) + '-' + str(day)
-                        print(year_string)
+                        reviseDB(year_string)
                     present_month = present_month + 1
     else:
         for year in oddYear:

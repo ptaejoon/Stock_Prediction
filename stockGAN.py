@@ -1,17 +1,20 @@
 import keras
 from keras import layers
+import pandas as pd
 from pandas import DataFrame
+import numpy as np
 import pymysql
+import gensim
 
 
 class GAN():
     def __init__(self, paragraph_vector, stock_index):
-        # LSTM Input : (1000+1024)*1
+        # LSTM Input : (795 + 792)*1
         # LSTM Output : (1000)
         # LSTM Output with time series : (1000 (Feature) * 10 (times))
         # discriminator Input : 1000 * 10
         # discriminator Output : 1 (0 or 1)
-        self.gen_input = 2024
+        self.gen_input = 795 + 792
         self.gen_output = 1000
         self.gen_timestep = 10
         self.gen_feature = 1000
@@ -62,17 +65,49 @@ class GAN():
         estimated_sequence = keras.Input(shape=(self.dis_input,))
         return keras.Model(estimated_sequence, model(estimated_sequence))
 
+    def load_article_from_DB(self,host,port,user,password,db,charset='utf8'):
+        DBinfo = {"host": host, "port": port,
+                 "user": user, "password": password, "db": db, 'charset': charset}
+        DBconnect = pymysql.connect(
+            host=DBinfo["host"],
+            port=DBinfo['port'],
+            user=DBinfo['user'],
+            password=DBinfo['password'],
+            db=DBinfo['db'],
+            charset=DBinfo['charset'],
+            #cursorclass=pymysql.cursors.DictCursor
+        )
+        cursor = DBconnect.cursor()
+        sql = """select news from article where writetime >= '2017-01-01' and writetime < '2017-01-02' """
+        cursor.execute(sql)
+        result = cursor.fetchall()
+        pvModel = gensim.models.doc2vec.Doc2Vec.load(('pragraphVec.model'))
+        same_day_pv = np.array()
+        for article in result:
+            article_vector = pvModel.infer_vector(article)
+            same_day_pv.append(article_vector,axis = 0)
+        same_day_pv = np.sum(same_day_pv, axis = 0)
+        same_day_pv = same_day_pv/len(same_day_pv)
+        return same_day_pv
+
     def build_input(self, pv, index):
+
         input = pv.set_index('date').join(index.set_index('date'))
         return input
+
+    def splitTrainTest(self):
+        print("1")
+        train = []
+        test = []
+        return train,test
 
     def train(self, epochs, batch_size=128, save_interval=50):
         # Load Data
         # Rescale Data
-
+        trian,test = self.splitTrainTest()
         half_batch = int(batch_size / 2)
         for epoch in range(epochs):
-
+            print("temp")
     # ------------
     # train Discriminator
     # select half as generator's value
@@ -95,34 +130,5 @@ class GAN():
     def predict(self, today):  # y hat
         return self.generator.predict(today)
 
-"""
-processedDB = {"host": 'sp-articledb.clwrfz92pdul.ap-northeast-2.rds.amazonaws.com', "port": 3306, "user": 'admin',
-               "password": "sogangsp", "db": "mydb", 'charset': 'utf8'}
-rawDB = {"host": 'article-raw-data.cnseysfqrlcj.ap-northeast-2.rds.amazonaws.com', "port": 3306, "user": 'admin',
-         "password": "sogangsp", "db": "mydb", 'charset': 'utf8'}
-
-evenDBconnect = pymysql.connect(
-    host=processedDB["host"],
-    port=processedDB['port'],
-    user=processedDB['user'],
-    password=processedDB['password'],
-    db=processedDB['db'],
-    charset=processedDB['charset']
-)
-
-oddDBconnect = pymysql.connect(
-    host=rawDB["host"],
-    port=rawDB['port'],
-    user=rawDB['user'],
-    password=rawDB['password'],
-    db=rawDB['db'],
-    charset=rawDB['charset']
-)
-evenCursor = evenDBconnect.cursor()
-oddCursor = oddDBconnect.cursor()
-
-
-def companySelection():
-    company_list_sql = select distinct corp_name from CORP_STOCK where TRADE_TIME < '2010-01-05 00:00:00.000'
-    
-"""
+gan = GAN()
+print(gan.load_article_from_DB('127.0.0.1',3306,'root','sogangsp','mydb'))
