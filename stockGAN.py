@@ -96,6 +96,7 @@ class GAN():
             tempVec = tempVec / len(article_same_day)
             returnVec = returnVec + tempVec
             count += 1
+            print(str(end)+' does not have stock data')
             end = end + datetime.timedelta(days=1)
             start = start + datetime.timedelta(days=1)
             stockCur.execute(stock_sql,(start,end))
@@ -113,7 +114,7 @@ class GAN():
         stockData = np.array(stockData)
         stockData = stockData.flatten(order='C')
         returnVec = np.concatenate((stockData, returnVec),axis=None)
-        print(returnVec)
+        print(str(end)+' produced input')
         return returnVec,end
 
     def build_input(self):
