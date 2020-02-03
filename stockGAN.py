@@ -194,16 +194,17 @@ class GAN():
 
             gen_input = self.GAN_trainX[epoch*batch_size:(epoch+1)*batch_size]
             gen_input = gen_input.reshape((int(gen_input.shape[0]/self.gen_timestep),self.gen_timestep,self.gen_feature))
+            print(gen_input.shape)
+            print("input")
+            print(gen_input)
             gen_answer = self.GAN_trainY[epoch*batch_size:(epoch+1)*batch_size]
             gen_answer = gen_answer.reshape((int(gen_answer.shape[0] / self.gen_timestep), self.gen_timestep,self.gen_output))
             gen_stock = self.GAN_trainSTOCK[epoch*batch_size:(epoch+1)*batch_size]
             gen_stock_output = self.generator.predict(gen_input)
 
-            print(gen_stock_output.shape)
-
             print(gen_stock.shape)
-
             print(gen_answer.shape)
+            print(gen_stock_output.shape)
 
             print("9일치 stock")
             print(gen_stock)
@@ -211,6 +212,7 @@ class GAN():
             print(gen_answer)
             print("prediction")
             print(gen_stock_output)
+
             gen_stock_output = gen_stock_output.reshape(batch_size,)
             gen_stock = gen_answer.reshape(batch_size,((self.gen_timestep-1)*self.stock_size))
 
