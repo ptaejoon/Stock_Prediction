@@ -193,14 +193,29 @@ class GAN():
             print("epoch : " + str(epoch))
 
             gen_input = self.GAN_trainX[epoch*batch_size:(epoch+1)*batch_size]
-            print(gen_input.shape[0])
             gen_input = gen_input.reshape((int(gen_input.shape[0]/self.gen_timestep),self.gen_timestep,self.gen_feature))
             gen_answer = self.GAN_trainY[epoch*batch_size:(epoch+1)*batch_size]
+            gen_answer = gen_answer.reshape((int(gen_answer.shape[0] / self.gen_timestep), self.gen_timestep,self.gen_output))
             gen_stock = self.GAN_trainSTOCK[epoch*batch_size:(epoch+1)*batch_size]
             gen_stock_output = self.generator.predict(gen_input)
 
-            gen_dis_real_input = np.append(gen_stock,gen_answer,axis=1)
-            gen_dis_fake_input = np.append(gen_stock,gen_stock_output,axis=1)
+            print(gen_stock_output.shape)
+
+            print(gen_stock.shape)
+
+            print(gen_answer.shape)
+
+            print("9일치 stock")
+            print(gen_stock)
+            print("answer")
+            print(gen_answer)
+            print("prediction")
+            print(gen_stock_output)
+            gen_stock_output = gen_stock_output.reshape(batch_size,)
+            gen_stock = gen_answer.reshape(batch_size,((self.gen_timestep-1)*self.stock_size))
+
+            gen_dis_real_input = np.hstack([gen_stock,gen_answer])#np.append(gen_stock,gen_answer,axis=1)
+            gen_dis_fake_input = np.hstack([gen_stock,gen_stock_output])#np.append(gen_stock,gen_stock_output,axis=1)
             d_loss_real = self.discriminator.train_on_batch(gen_dis_real_input,np.ones((batch_size),1))
             d_loss_fake = self.discriminator.train_on_batch(gen_dis_fake_input,np.zeros((batch_size,1)))
             #half and batch size의 문제
@@ -214,5 +229,5 @@ class GAN():
         return self.generator.predict(today)
 
 gan = GAN()
-gan.train(epochs=100, batch_size=10)
+gan.train(epochs=100, batch_size=20)
 gan.predict()
