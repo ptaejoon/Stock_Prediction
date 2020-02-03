@@ -29,7 +29,7 @@ class GAN():
         self.discriminator = self.build_discriminator()
         self.generator = self.build_generator(LayerName='LSTM')
         print("Start Building Data")
-        self.GAN_trainX,self.GAN_trainY,self.GAN_trainSTOCK,self.GAN_testX,self.GAN_testY,self.GAN_testSTOCK = self.build_input()
+        #self.GAN_trainX,self.GAN_trainY,self.GAN_trainSTOCK,self.GAN_testX,self.GAN_testY,self.GAN_testSTOCK = self.build_input()
         print("Training Data Processing Finished")
         self.generator.compile(loss='mean_squared_error', optimizer='sgd')
         self.discriminator.compile(loss='binary_crossentropy', optimizer=keras.optimizers.Adam(0.0002, 0.5))
@@ -53,10 +53,10 @@ class GAN():
     def build_generator(self, LayerName):
         model = keras.Sequential()
         if LayerName == 'LSTM':
-            model.add(keras.layers.LSTM(self.gen_output, input_shape=(self.gen_timestep, self.gen_feature)))
+            model.add(keras.layers.LSTM(self.gen_output, input_shape=(self.gen_timestep, self.gen_feature),return_sequences=True))
         elif LayerName == 'GRU':
-            model.add(keras.layers.GRU(self.gen_output, input_shape=(self.gen_timestep, self.gen_feature)))
-        model.add(keras.layers.Reshape((1,self.gen_output)))
+            model.add(keras.layers.GRU(self.gen_output, input_shape=(self.gen_timestep, self.gen_feature),return_sequences=True))
+        #model.add(keras.layers.Reshape((1,self.gen_output)))
         model.summary()
         merged_input = keras.Input(shape=(self.gen_timestep,self.gen_feature))
         return keras.Model(merged_input, model(merged_input))
@@ -169,7 +169,6 @@ class GAN():
             #print(timestep_days.shape)
             trainSTOCK = np.vstack([trainSTOCK, timestep_days.flatten()])
         trainY = trainY[9:]
-        trainX = trainX[:40]
 
 
         for iter in range(15):
@@ -181,7 +180,6 @@ class GAN():
             timestep_days = np.copy(trainY[i:(i+self.gen_timestep-1)])
             testSTOCK = np.vstack([testSTOCK,timestep_days.flatten()])
         testY = testY[9:]
-        testX = testX[:5]
 
         print("Data Setting DONE")
         return trainX,trainY,trainSTOCK,testX,testY,testSTOCK
@@ -193,37 +191,29 @@ class GAN():
             print("epoch : " + str(epoch))
 
             gen_input = self.GAN_trainX[epoch*batch_size:(epoch+1)*batch_size]
-            gen_input = gen_input.reshape((int(gen_input.shape[0]/self.gen_timestep),self.gen_timestep,self.gen_feature))
             print(gen_input.shape)
-            print("input")
-            print(gen_input)
+            gen_input = gen_input.reshape((-1,self.gen_timestep,self.gen_feature))
+            print(gen_input.shape)
             gen_answer = self.GAN_trainY[epoch*batch_size:(epoch+1)*batch_size]
-            gen_answer = gen_answer.reshape((int(gen_answer.shape[0] / self.gen_timestep), self.gen_timestep,self.gen_output))
+            gen_answer = gen_answer.reshape((-1, 1,self.gen_output))
             gen_stock = self.GAN_trainSTOCK[epoch*batch_size:(epoch+1)*batch_size]
+            gen_stock = gen_stock.reshape((-1,(self.gen_timestep-1),self.gen_output))
             gen_stock_output = self.generator.predict(gen_input)
+            gen_stock_output = gen_stock_output.reshape((-1,1,self.gen_output))
 
             print(gen_stock.shape)
             print(gen_answer.shape)
             print(gen_stock_output.shape)
 
-            print("9일치 stock")
-            print(gen_stock)
-            print("answer")
-            print(gen_answer)
-            print("prediction")
-            print(gen_stock_output)
-
-            gen_stock_output = gen_stock_output.reshape(batch_size,)
-            gen_stock = gen_answer.reshape(batch_size,((self.gen_timestep-1)*self.stock_size))
-
             gen_dis_real_input = np.hstack([gen_stock,gen_answer])#np.append(gen_stock,gen_answer,axis=1)
             gen_dis_fake_input = np.hstack([gen_stock,gen_stock_output])#np.append(gen_stock,gen_stock_output,axis=1)
-            d_loss_real = self.discriminator.train_on_batch(gen_dis_real_input,np.ones((batch_size),1))
+            print(gen_dis_real_input.shape)
+            d_loss_real = self.discriminator.train_on_batch(gen_dis_real_input,np.ones((batch_size,1)))
             d_loss_fake = self.discriminator.train_on_batch(gen_dis_fake_input,np.zeros((batch_size,1)))
             #half and batch size의 문제
             d_loss = 0.5 * np.add(d_loss_real,d_loss_fake)
-
-            g_loss = self.combined.train_on_batch([gen_input,gen_stock],gen_answer)
+            valid = np.array([1]*batch_size)
+            g_loss = self.combined.train_on_batch([gen_input,gen_stock],valid)#gen_answer)
             print("%d [D loss: %f, acc.: %.2f%%] [G loss: %f]" % (epoch, d_loss[0], 100 * d_loss[1], g_loss))
 
 
