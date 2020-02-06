@@ -6,14 +6,19 @@ import numpy as np
 import pymysql
 import gensim
 import datetime
+from sklearn.preprocessing import MinMaxScaler
+
+def root_mean_squared_error(y_true, y_pred):
+    return keras.backend.sqrt(keras.backend.mean(keras.backend.square(y_pred - y_true)))
 
 class GAN():
-    def __init__(self):
+    def __init__(self,batch_size):
         # LSTM Input : (795 + 792)*1
         # LSTM Output : (1000)
         # LSTM Output with time series : (1000 (Feature) * 10 (times))
         # discriminator Input : 1000 * 10
         # discriminator Output : 1 (0 or 1)
+        self.batch_size = batch_size
         self.pv_size = 792
         self.stock_size = 795
         self.gen_output = 795
@@ -31,8 +36,8 @@ class GAN():
         print("Start Building Data")
         self.GAN_trainX,self.GAN_trainY,self.GAN_trainSTOCK,self.GAN_testX,self.GAN_testY,self.GAN_testSTOCK = self.build_input()
         print("Training Data Processing Finished")
-        self.generator.compile(loss='mean_squared_error', optimizer=keras.optimizers.Adam(0.0002, 0.5))
-        self.discriminator.compile(loss='binary_crossentropy', optimizer=keras.optimizers.Adam(0.0002, 0.5))
+        self.generator.compile(loss=root_mean_squared_error, optimizer=keras.optimizers.Adam(0.0004, 0.5))
+        self.discriminator.compile(loss='binary_crossentropy', optimizer=keras.optimizers.Adam(0.02, 0.5))
         self.discriminator.trainable = False
 
 
@@ -48,13 +53,13 @@ class GAN():
 
         valid = self.discriminator(inputs=combined_stock)
         self.combined = keras.Model(inputs=[combined_input,past_stock], outputs=valid)
-        self.combined.compile(loss='binary_crossentropy', optimizer=keras.optimizers.Adam(0.0002, 0.5))
+        self.combined.compile(loss='binary_crossentropy', optimizer=keras.optimizers.Adam(0.02, 0.5))
         self.combined.summary()
 
     def build_generator(self, LayerName):
         model = keras.Sequential()
         if LayerName == 'LSTM':
-            model.add(keras.layers.LSTM(self.gen_output, input_shape=(self.gen_timestep, self.gen_feature)))#return_sequences=True))
+            model.add(keras.layers.LSTM(self.gen_output,batch_input_shape=(self.batch_size,self.gen_timestep,self.gen_feature)))# input_shape=(self.gen_timestep, self.gen_feature)))#return_sequences=True))
         elif LayerName == 'GRU':
             model.add(keras.layers.GRU(self.gen_output, input_shape=(self.gen_timestep, self.gen_feature)))#return_sequences=True))
         #model.add(keras.layers.BatchNormalization())
@@ -65,14 +70,14 @@ class GAN():
 
     def build_discriminator(self):
         model = keras.Sequential()
+
         model.add(keras.layers.Conv1D(32, kernel_size=5,strides=5,input_shape=(self.gen_timestep,self.stock_size),data_format='channels_first'))
-        model.add(keras.layers.BatchNormalization())
+        #model.add(keras.layers.BatchNormalization())
         model.add(keras.layers.LeakyReLU())
         model.add(keras.layers.Conv1D(32, kernel_size=3))
-        model.add(keras.layers.BatchNormalization())
         model.add(keras.layers.LeakyReLU())
         model.add(keras.layers.Conv1D(32, kernel_size=3))
-        model.add(keras.layers.BatchNormalization())
+        #model.add(keras.layers.BatchNormalization())
         model.add(keras.layers.LeakyReLU())
         model.add(keras.layers.MaxPooling1D(pool_size=2))
         model.add(keras.layers.Flatten())
@@ -108,7 +113,7 @@ class GAN():
             tempVec = tempVec / len(article_same_day)
             returnVec = returnVec + tempVec
             count += 1
-            print(str(end)+' does not have stock data')
+            #print(str(end)+' does not have stock data')
             end = end + datetime.timedelta(days=1)
             start = start + datetime.timedelta(days=1)
             stockCur.execute(stock_sql,(start,end))
@@ -125,8 +130,8 @@ class GAN():
         returnVec = returnVec / count
         stockData = np.array(stockData)
         stockData = stockData.flatten(order='C')
-        returnVec = np.concatenate((stockData, returnVec),axis=None)
-        print(str(end)+' produced input')
+        #returnVec = np.concatenate((stockData, returnVec),axis=None)
+        #print(str(end)+' produced input')
         end = end + datetime.timedelta(days=1)
         return returnVec,stockData,end
     def changeLSTMsetX(self,Xdata):
@@ -160,10 +165,10 @@ class GAN():
         )
         pv_model = gensim.models.Doc2Vec.load('paragraph_vector.model')
         days = datetime.datetime(2011, 1, 2, 17, 0, 0)
-        trainX = np.empty(self.pv_size+self.stock_size)
+        np_pv = np.empty(self.pv_size)
+        np_stock = np.empty(self.stock_size)
         trainY = np.empty(self.stock_size)
         trainSTOCK = np.empty(self.stock_size*(self.gen_timestep - 1))
-        testX = np.empty(self.pv_size+self.stock_size)
         testY = np.empty(self.stock_size)
         testSTOCK = np.empty(self.stock_size*(self.gen_timestep - 1))
         """while days.year < 2020:
@@ -171,41 +176,64 @@ class GAN():
             trainX = np.vstack([input,oneday])
             print(input.shape)
         trainY = trainX[10:]"""
-        for iter in range(50):
+        #while days.month < 12:
+        for i in range(50):
             oneday, stock,days = self.numpy_one_day_data(articleDBconnect, stockDBconnect, days, pv_model)
-            trainX = np.vstack([trainX, oneday])
-            #print(stock)
-            #print(oneday)
+            np_pv = np.vstack([np_pv,oneday])
+            np_stock = np.vstack([np_stock,stock])
+            #trainX = np.vstack([trainX, oneday])
             if len(stock) is not 0:
                 trainY = np.vstack([trainY,stock])
+        np_stock = np.delete(np_stock,(0),axis=0)
+        np_pv = np.delete(np_pv,(0),axis=0)
+        np_stock = MinMaxScaler().fit_transform(np_stock)
+        trainX = np.concatenate((np_stock,np_pv),axis=1)
+        trainY = np.delete(trainY, (0), axis=0)
         for i in range(len(trainX) - self.gen_timestep):
-            timestep_days = trainY[i: i + (self.gen_timestep-1)]
-            #print(timestep_days.shape)
+            timestep_days = np.array(trainY[i: i + (self.gen_timestep-1)], copy = True)
             trainSTOCK = np.vstack([trainSTOCK, timestep_days.flatten()])
+        trainSTOCK = np.delete(trainSTOCK,(0),axis=0)
+        #print(trainY[0])
         trainY = trainY[self.gen_timestep:]
         trainX = self.changeLSTMsetX(trainX)
+        # TEST SET BUILDING
+        print("------------ START BUILDING TEST SET ---------")
+        np_pv = np.empty(self.pv_size)
+        np_stock = np.empty(self.stock_size)
         for iter in range(15):
             oneday, stock,days = self.numpy_one_day_data(articleDBconnect, stockDBconnect, days, pv_model)
-            testX = np.vstack([testX, oneday])
+            #testX = np.vstack([testX, oneday])
+            np_pv = np.vstack([np_pv, oneday])
+            np_stock = np.vstack([np_stock, stock])
             if len(stock) is not 0:
                 testY = np.vstack([testY,stock])
+        np_stock = np.delete(np_stock, (0), axis=0)
+        np_pv = np.delete(np_pv, (0), axis=0)
+        np_stock = MinMaxScaler().fit_transform(np_stock)
+        testX = np.concatenate((np_stock, np_pv), axis=1)
+        testY = np.delete(trainY, (0), axis=0)
         for i in range(len(testX) - self.gen_timestep):
-            timestep_days = testY[i:(i+self.gen_timestep-1)]
+            timestep_days = np.array(testY[i:(i+self.gen_timestep-1)],copy=True)
             testSTOCK = np.vstack([testSTOCK,timestep_days.flatten()])
+        testSTOCK = np.delete(trainSTOCK, (0), axis=0)
         testY = testY[self.gen_timestep:]
         testX = self.changeLSTMsetX(testX)
 
         print("Data Setting DONE")
         return trainX,trainY,trainSTOCK,testX,testY,testSTOCK
 
-    def train(self, epochs, batch_size=128):
+    def train(self):
         # Rescale Data
+        batch_size = self.batch_size
+        epochs = int(self.GAN_trainX.shape[0]/batch_size)
         half_batch = int(batch_size / 2)
         for epoch in range(epochs):
             print("epoch : " + str(epoch))
 
             gen_input = self.GAN_trainX[epoch*batch_size:(epoch+1)*batch_size]
+            #print(gen_input)
             #print(gen_input.shape)
+            #print(np.isnan((gen_input)))
             gen_input = gen_input.reshape((-1,self.gen_timestep,self.gen_feature))
             gen_answer = self.GAN_trainY[epoch*batch_size:(epoch+1)*batch_size]
             gen_answer = gen_answer.reshape((-1, 1,self.gen_output))
@@ -213,16 +241,21 @@ class GAN():
             #print(gen_stock.shape)
             gen_stock = gen_stock.reshape((-1,(self.gen_timestep-1),self.gen_output))
             gen_stock_output = self.generator.predict(gen_input)
+            #print(gen_stock_output)
             gen_stock_output = gen_stock_output.reshape((-1,1,self.gen_output))
-            print(gen_answer)
-            print(gen_stock_output)
+            #print(gen_answer)
+
             gen_dis_real_input = np.hstack([gen_stock,gen_answer])#np.append(gen_stock,gen_answer,axis=1)
             gen_dis_fake_input = np.hstack([gen_stock,gen_stock_output])#np.append(gen_stock,gen_stock_output,axis=1)
+            #print(gen_stock_output)
+            #print(gen_dis_fake_input)
+            #print(gen_dis_real_input)
             d_loss_real = self.discriminator.train_on_batch(gen_dis_real_input,np.ones((batch_size,1)))
             d_loss_fake = self.discriminator.train_on_batch(gen_dis_fake_input,np.zeros((batch_size,1)))
+            #print("fake")
             #print(d_loss_fake)
+            #print("real")
             #print(d_loss_real)
-            #half and batch size의 문제
             d_loss = 0.5 * np.add(d_loss_real,d_loss_fake)
             valid = np.array([1]*batch_size)
             g_loss = self.combined.train_on_batch([gen_input,gen_stock],valid)#gen_answer)
@@ -231,5 +264,5 @@ class GAN():
     def predict(self, today):  # y hat
         return self.generator.predict(today)
 
-gan = GAN()
-gan.train(epochs=2, batch_size=20)
+gan = GAN(batch_size=20)
+gan.train()
