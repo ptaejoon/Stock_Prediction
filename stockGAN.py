@@ -38,7 +38,7 @@ class GAN():
         print("Start Building Data")
         self.GAN_trainX,self.GAN_trainY,self.GAN_trainSTOCK,self.GAN_testX,self.GAN_testY,self.GAN_testSTOCK = self.build_input()
         print("Training Data Processing Finished")
-        self.generator.compile(loss=root_mean_squared_error, optimizer=keras.optimizers.Adam(0.0004, 0.5))
+        self.generator.compile(loss=root_mean_squared_error, optimizer=keras.optimizers.Adam(0.04, 0.5))
         self.discriminator.compile(loss='binary_crossentropy', optimizer=keras.optimizers.Adam(0.02, 0.5))
         self.discriminator.trainable = False
 
