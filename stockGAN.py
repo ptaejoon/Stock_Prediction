@@ -7,12 +7,14 @@ import pymysql
 import gensim
 import datetime
 from sklearn.preprocessing import MinMaxScaler
+#from khaiii import KhaiiiApi
 
 def root_mean_squared_error(y_true, y_pred):
     return keras.backend.sqrt(keras.backend.mean(keras.backend.square(y_pred - y_true)))
 
 class GAN():
     def __init__(self,batch_size):
+        #self.khaiii = KhaiiiApi()
         # LSTM Input : (795 + 792)*1
         # LSTM Output : (1000)
         # LSTM Output with time series : (1000 (Feature) * 10 (times))
@@ -90,6 +92,10 @@ class GAN():
     def numpy_one_day_data(self,newsDB,stockDB,days,pv):
         end = days
         start = days + datetime.timedelta(days=-1)
+        # if days.year % 2 == 0:
+        #     news_sql = "select news from even_article where writetime >= %s and writetime < %s"
+        # else :
+        #     news_sql = "select news from odd_article where writetime >= %s and writetime < %s"
         news_sql = "select news from article where writetime >= %s and writetime < %s"
         stock_sql = """select CLOSE_PRICE, OPEN_PRICE, MAX_PRICE, MIN_PRICE, TRADE_AMOUNT
             from CORP_STOCK where TRADE_TIME >= %s and TRADE_TIME < %s and
@@ -108,6 +114,8 @@ class GAN():
             article_same_day = newsCur.fetchall()
             tempVec = np.zeros(self.pv_size)
             for article in article_same_day:
+                #article_token = tokenize(article)
+                #vec = pv.infer_vector(article_token)
                 vec = pv.infer_vector(article)
                 tempVec = tempVec + vec
             tempVec = tempVec / len(article_same_day)
@@ -131,7 +139,7 @@ class GAN():
         stockData = np.array(stockData)
         stockData = stockData.flatten(order='C')
         #returnVec = np.concatenate((stockData, returnVec),axis=None)
-        #print(str(end)+' produced input')
+        print(str(end)+' produced input')
         end = end + datetime.timedelta(days=1)
         return returnVec,stockData,end
     def changeLSTMsetX(self,Xdata):
@@ -165,18 +173,14 @@ class GAN():
         )
         pv_model = gensim.models.Doc2Vec.load('paragraph_vector.model')
         days = datetime.datetime(2011, 1, 2, 17, 0, 0)
+        #days = datetime.datetime(2010,1, 2, 17, 0, 0)
         np_pv = np.empty(self.pv_size)
         np_stock = np.empty(self.stock_size)
         trainY = np.empty(self.stock_size)
         trainSTOCK = np.empty(self.stock_size*(self.gen_timestep - 1))
         testY = np.empty(self.stock_size)
         testSTOCK = np.empty(self.stock_size*(self.gen_timestep - 1))
-        """while days.year < 2020:
-            oneday,days = self.numpy_one_day_data(articleDBconnect,stockDBconnect,days,pv_model)
-            trainX = np.vstack([input,oneday])
-            print(input.shape)
-        trainY = trainX[10:]"""
-        #while days.month < 12:
+        #while days.year < 2019:
         for i in range(50):
             oneday, stock,days = self.numpy_one_day_data(articleDBconnect, stockDBconnect, days, pv_model)
             np_pv = np.vstack([np_pv,oneday])
@@ -200,6 +204,7 @@ class GAN():
         print("------------ START BUILDING TEST SET ---------")
         np_pv = np.empty(self.pv_size)
         np_stock = np.empty(self.stock_size)
+        #while days.year < 2020:
         for iter in range(15):
             oneday, stock,days = self.numpy_one_day_data(articleDBconnect, stockDBconnect, days, pv_model)
             #testX = np.vstack([testX, oneday])
@@ -234,7 +239,8 @@ class GAN():
             #print(gen_input)
             #print(gen_input.shape)
             #print(np.isnan((gen_input)))
-            gen_input = gen_input.reshape((-1,self.gen_timestep,self.gen_feature))
+            #gen_input = gen_input.reshape((-1,self.gen_timestep,self.gen_feature))
+            #print(gen_input.shape)
             gen_answer = self.GAN_trainY[epoch*batch_size:(epoch+1)*batch_size]
             gen_answer = gen_answer.reshape((-1, 1,self.gen_output))
             gen_stock = self.GAN_trainSTOCK[epoch*batch_size:(epoch+1)*batch_size]
@@ -261,8 +267,52 @@ class GAN():
             g_loss = self.combined.train_on_batch([gen_input,gen_stock],valid)#gen_answer)
             print(str(epoch) + ' [D loss : ' + str(d_loss) + ', acc : ' + str(100*d_loss)+'] [ G loss : '+str(g_loss))
 
-    def predict(self, today):  # y hat
-        return self.generator.predict(today)
+    def predict(self, days):  # y hat
+        articleDBconnect = pymysql.connect(
+            host=self.article["host"],
+            port=self.article['port'],
+            user=self.article['user'],
+            password=self.article['password'],
+            db=self.article['db'],
+            charset=self.article['charset'],
+            # cursorclass=pymysql.cursors.DictCursor
+        )
+        stockDBconnect = pymysql.connect(
+            host=self.index["host"],
+            port=self.index['port'],
+            user=self.index['user'],
+            password=self.index['password'],
+            db=self.index['db'],
+            charset=self.index['charset'],
+            # cursorclass=pymysql.cursors.DictCursor
+        )
+        pv_model = gensim.models.Doc2Vec.load('paragraph_vector.model')
+        days = days - datetime.timedelta(days=self.gen_timestep)
+        print(days)
+        np_pv = np.empty(self.pv_size)
+        np_stock = np.empty(self.stock_size)
+
+        for i in range(self.gen_timestep):
+            oneday, stock, days = self.numpy_one_day_data(articleDBconnect, stockDBconnect, days, pv_model)
+            np_pv = np.vstack([np_pv, oneday])
+            np_stock = np.vstack([np_stock, stock])
+
+        np_stock = np.delete(np_stock, (0), axis=0)
+        np_pv = np.delete(np_pv, (0), axis=0)
+        print(np_pv.shape)
+        np_stock = MinMaxScaler().fit_transform(np_stock)
+        trainX = np.concatenate((np_stock, np_pv), axis=1)
+        print(trainX.shape)
+        # print(trainY[0])
+        trainX = trainX.reshape((-1,self.gen_timestep,self.gen_feature))#self.changeLSTMsetX(trainX)
+        print(trainX.shape)
+        return self.generator.predict(trainX)
+
+    def predict_testSet(self):
+        testSet = self.GAN_testX
+        return self.generator.predict(testSet)
 
 gan = GAN(batch_size=20)
 gan.train()
+days = datetime.datetime(2011, 4, 20, 17, 0, 0)
+gan.predict_testSet()
