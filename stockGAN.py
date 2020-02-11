@@ -220,7 +220,7 @@ class GAN():
         for i in range(len(testX) - self.gen_timestep):
             timestep_days = np.array(testY[i:(i+self.gen_timestep-1)],copy=True)
             testSTOCK = np.vstack([testSTOCK,timestep_days.flatten()])
-        testSTOCK = np.delete(trainSTOCK, (0), axis=0)
+        testSTOCK = np.delete(testSTOCK, (0), axis=0)
         testY = testY[self.gen_timestep:]
         testX = self.changeLSTMsetX(testX)
 
@@ -265,7 +265,7 @@ class GAN():
             d_loss = 0.5 * np.add(d_loss_real,d_loss_fake)
             valid = np.array([1]*batch_size)
             g_loss = self.combined.train_on_batch([gen_input,gen_stock],valid)#gen_answer)
-            print(str(epoch) + ' [D loss : ' + str(d_loss[0]) + ', acc : ' + str(100*d_loss[1])+'] [ G loss : '+str(g_loss[0]))
+            print(str(epoch) + ' [D loss : ' + str(d_loss[0]) + ', acc : ' + str(100*d_loss[1])+'] [ G loss : '+str(g_loss))
 
     def predict(self, days):  # y hat
         articleDBconnect = pymysql.connect(
