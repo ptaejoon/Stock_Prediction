@@ -38,8 +38,8 @@ class GAN():
         print("Start Building Data")
         self.GAN_trainX,self.GAN_trainY,self.GAN_trainSTOCK,self.GAN_testX,self.GAN_testY,self.GAN_testSTOCK = self.build_input()
         print("Training Data Processing Finished")
-        self.generator.compile(loss=root_mean_squared_error, optimizer=keras.optimizers.Adam(0.04, 0.5))
-        self.discriminator.compile(loss='binary_crossentropy', optimizer=keras.optimizers.Adam(0.02, 0.5))
+        self.generator.compile(loss=root_mean_squared_error, optimizer=keras.optimizers.Adam(0.04, 0.5),metrics=['accuracy'])
+        self.discriminator.compile(loss='binary_crossentropy', optimizer=keras.optimizers.Adam(0.02, 0.5),metrics=['accuracy'])
         self.discriminator.trainable = False
 
 
@@ -216,7 +216,7 @@ class GAN():
         np_pv = np.delete(np_pv, (0), axis=0)
         np_stock = MinMaxScaler().fit_transform(np_stock)
         testX = np.concatenate((np_stock, np_pv), axis=1)
-        testY = np.delete(trainY, (0), axis=0)
+        testY = np.delete(testY, (0), axis=0)
         for i in range(len(testX) - self.gen_timestep):
             timestep_days = np.array(testY[i:(i+self.gen_timestep-1)],copy=True)
             testSTOCK = np.vstack([testSTOCK,timestep_days.flatten()])
@@ -265,7 +265,7 @@ class GAN():
             d_loss = 0.5 * np.add(d_loss_real,d_loss_fake)
             valid = np.array([1]*batch_size)
             g_loss = self.combined.train_on_batch([gen_input,gen_stock],valid)#gen_answer)
-            print(str(epoch) + ' [D loss : ' + str(d_loss) + ', acc : ' + str(100*d_loss)+'] [ G loss : '+str(g_loss))
+            print(str(epoch) + ' [D loss : ' + str(d_loss[0]) + ', acc : ' + str(100*d_loss[1])+'] [ G loss : '+str(g_loss[0]))
 
     def predict(self, days):  # y hat
         articleDBconnect = pymysql.connect(
@@ -316,3 +316,4 @@ gan = GAN(batch_size=20)
 gan.train()
 days = datetime.datetime(2011, 4, 20, 17, 0, 0)
 gan.predict_testSet()
+gan.generator.evaluate(gan.GAN_testX,gan.GAN_testY)
