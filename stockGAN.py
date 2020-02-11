@@ -28,6 +28,7 @@ class GAN():
         self.gen_output = 795
         self.gen_timestep = 10
         self.gen_feature = self.pv_size+self.stock_size
+        self.scaler = MinMaxScaler()
         self.article = {"host": '127.0.0.1', "port": 3306,
                   "user": 'root', "password": 'sogangsp', "db": 'mydb', 'charset': 'utf8'}
         self.index = {"host": 'sp-articledb.clwrfz92pdul.ap-northeast-2.rds.amazonaws.com', "port": 3306,
@@ -46,11 +47,12 @@ class GAN():
             self.GAN_testX = pickle.load(open('testX.sav', 'rb'))
             self.GAN_testY = pickle.load(open('testY.sav', 'rb'))
             self.GAN_testSTOCK = pickle.load(open('testSTOCK.sav', 'rb'))
+            self.scaler = pickle.load(open('scaler.sav','rb'))
         else:
             print("Data Doesn't Exists. Start Building")
             self.GAN_trainX,self.GAN_trainY,self.GAN_trainSTOCK,self.GAN_testX,self.GAN_testY,self.GAN_testSTOCK = self.build_input()
         print("Training Data Processing Finished")
-        self.generator.compile(loss=root_mean_squared_error, optimizer=keras.optimizers.Adam(0.04, 0.5),metrics=[root_mean_squared_error])
+        self.generator.compile(loss=root_mean_squared_error, optimizer=keras.optimizers.Adam(0.04, 0.5),metrics=['accuracy'])
         self.discriminator.compile(loss='binary_crossentropy', optimizer=keras.optimizers.Adam(0.02, 0.5),metrics=['accuracy'])
         self.discriminator.trainable = False
 
@@ -184,7 +186,7 @@ class GAN():
             # cursorclass=pymysql.cursors.DictCursor
         )
         pv_model = gensim.models.Doc2Vec.load('paragraph_vector.model')
-        days = datetime.datetime(2011, 1, 2, 17, 0, 0)
+        days = datetime.datetime(2011, 1, 2, 15, 30, 0)
         #days = datetime.datetime(2010,1, 2, 17, 0, 0)
         np_pv = np.empty(self.pv_size)
         np_stock = np.empty(self.stock_size)
@@ -202,7 +204,7 @@ class GAN():
                 trainY = np.vstack([trainY,stock])
         np_stock = np.delete(np_stock,(0),axis=0)
         np_pv = np.delete(np_pv,(0),axis=0)
-        np_stock = MinMaxScaler().fit_transform(np_stock)
+        np_stock = self.scaler.fit_transform(np_stock)
         trainX = np.concatenate((np_stock,np_pv),axis=1)
         trainY = np.delete(trainY, (0), axis=0)
         for i in range(len(trainX) - self.gen_timestep):
@@ -212,6 +214,7 @@ class GAN():
         #print(trainY[0])
         trainY = trainY[self.gen_timestep:]
         trainX = self.changeLSTMsetX(trainX)
+        trainY = self.scaler.transform(trainY)
         # TEST SET BUILDING
         print("------------ START BUILDING TEST SET ---------")
         np_pv = np.empty(self.pv_size)
@@ -226,7 +229,7 @@ class GAN():
                 testY = np.vstack([testY,stock])
         np_stock = np.delete(np_stock, (0), axis=0)
         np_pv = np.delete(np_pv, (0), axis=0)
-        np_stock = MinMaxScaler().fit_transform(np_stock)
+        np_stock = self.scaler.transform(np_stock)
         testX = np.concatenate((np_stock, np_pv), axis=1)
         testY = np.delete(testY, (0), axis=0)
         for i in range(len(testX) - self.gen_timestep):
@@ -234,8 +237,8 @@ class GAN():
             testSTOCK = np.vstack([testSTOCK,timestep_days.flatten()])
         testSTOCK = np.delete(testSTOCK, (0), axis=0)
         testY = testY[self.gen_timestep:]
+        testY = self.scaler.transform(testY)
         testX = self.changeLSTMsetX(testX)
-
         print("Data Setting DONE")
 
         print("Data Saving")
@@ -245,6 +248,7 @@ class GAN():
         pickle.dump(testX, open('testX.sav', 'wb'))
         pickle.dump(testY, open('testY.sav', 'wb'))
         pickle.dump(testSTOCK, open('testSTOCK.sav', 'wb'))
+        pickle.dump(self.scaler, open('scaler.sav','wb'))
         print("Data Saving Done")
         return trainX,trainY,trainSTOCK,testX,testY,testSTOCK
 
@@ -268,6 +272,8 @@ class GAN():
             #print(gen_stock.shape)
             gen_stock = gen_stock.reshape((-1,(self.gen_timestep-1),self.gen_output))
             gen_stock_output = self.generator.predict(gen_input)
+            gen_stock_output = gen_stock_output.reshape((self.batch_size, self.gen_output))
+            gen_stock_output = self.scaler.inverse_transform(gen_stock_output)
             #print(gen_stock_output)
             gen_stock_output = gen_stock_output.reshape((-1,1,self.gen_output))
             #print(gen_answer)
@@ -325,17 +331,20 @@ class GAN():
         trainX = np.concatenate((np_stock, np_pv), axis=1)
         print(trainX.shape)
         # print(trainY[0])
-        trainX = trainX.reshape((-1,self.gen_timestep,self.gen_feature))#self.changeLSTMsetX(trainX)
+        trainX = trainX.reshape((-1,self.gen_timestep,self.gen_output))#self.changeLSTMsetX(trainX)
         print(trainX.shape)
-        return self.generator.predict(trainX)
+        predict_result = self.generator.predict(trainX)
+        return self.scaler.inverse_transform(predict_result)
 
     def predict_testSet(self):
         testSet = self.GAN_testX
-        return self.generator.predict(testSet)
+        predict_result = self.generator.predict(testSet).reshape(-1,self.gen_output)
+        return self.scaler.inverse_transform(predict_result)
 
 if __name__ == '__main__':
     gan = GAN(batch_size=20)
     gan.train()
     days = datetime.datetime(2011, 4, 20, 17, 0, 0)
-    gan.predict_testSet()
-    gan.generator.evaluate(gan.GAN_testX,gan.GAN_testY)
+    print(gan.predict_testSet())
+    print(gan.scaler.inverse_transform(gan.GAN_testY))
+    print(gan.generator.evaluate(gan.GAN_testX,gan.GAN_testY))
