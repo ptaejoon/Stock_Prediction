@@ -7,6 +7,8 @@ import pymysql
 import gensim
 import datetime
 from sklearn.preprocessing import MinMaxScaler
+import pickle
+import os
 #from khaiii import KhaiiiApi
 
 def root_mean_squared_error(y_true, y_pred):
@@ -36,9 +38,19 @@ class GAN():
         self.discriminator = self.build_discriminator()
         self.generator = self.build_generator(LayerName='LSTM')
         print("Start Building Data")
-        self.GAN_trainX,self.GAN_trainY,self.GAN_trainSTOCK,self.GAN_testX,self.GAN_testY,self.GAN_testSTOCK = self.build_input()
+        if os.path.isfile('trainX.sav') is True:
+            print("Data Already Exists. Start Loading")
+            self.GAN_trainX = pickle.load(open('trainX.sav','rb'))
+            self.GAN_trainY = pickle.load(open('trainY.sav','rb'))
+            self.GAN_trainSTOCK = pickle.load(open('trainSTOCK.sav', 'rb'))
+            self.GAN_testX = pickle.load(open('testX.sav', 'rb'))
+            self.GAN_testY = pickle.load(open('testY.sav', 'rb'))
+            self.GAN_testSTOCK = pickle.load(open('testSTOCK.sav', 'rb'))
+        else:
+            print("Data Doesn't Exists. Start Building")
+            self.GAN_trainX,self.GAN_trainY,self.GAN_trainSTOCK,self.GAN_testX,self.GAN_testY,self.GAN_testSTOCK = self.build_input()
         print("Training Data Processing Finished")
-        self.generator.compile(loss=root_mean_squared_error, optimizer=keras.optimizers.Adam(0.04, 0.5),metrics=['accuracy'])
+        self.generator.compile(loss=root_mean_squared_error, optimizer=keras.optimizers.Adam(0.04, 0.5),metrics=[root_mean_squared_error])
         self.discriminator.compile(loss='binary_crossentropy', optimizer=keras.optimizers.Adam(0.02, 0.5),metrics=['accuracy'])
         self.discriminator.trainable = False
 
@@ -225,6 +237,15 @@ class GAN():
         testX = self.changeLSTMsetX(testX)
 
         print("Data Setting DONE")
+
+        print("Data Saving")
+        pickle.dump(trainX,open('trainX.sav','wb'))
+        pickle.dump(trainY,open('trainY.sav','wb'))
+        pickle.dump(trainSTOCK, open('trainSTOCK.sav', 'wb'))
+        pickle.dump(testX, open('testX.sav', 'wb'))
+        pickle.dump(testY, open('testY.sav', 'wb'))
+        pickle.dump(testSTOCK, open('testSTOCK.sav', 'wb'))
+        print("Data Saving Done")
         return trainX,trainY,trainSTOCK,testX,testY,testSTOCK
 
     def train(self):
@@ -312,8 +333,9 @@ class GAN():
         testSet = self.GAN_testX
         return self.generator.predict(testSet)
 
-gan = GAN(batch_size=20)
-gan.train()
-days = datetime.datetime(2011, 4, 20, 17, 0, 0)
-gan.predict_testSet()
-gan.generator.evaluate(gan.GAN_testX,gan.GAN_testY)
+if __name__ == '__main__':
+    gan = GAN(batch_size=20)
+    gan.train()
+    days = datetime.datetime(2011, 4, 20, 17, 0, 0)
+    gan.predict_testSet()
+    gan.generator.evaluate(gan.GAN_testX,gan.GAN_testY)

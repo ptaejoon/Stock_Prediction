@@ -17,9 +17,7 @@ else:
     gan = sav_gan
 
 predicted_2019 = gan.predict_testSet()
-answer_2019 = gan.GAN_testY
 print(predicted_2019)
-print(gan.generator.evaluate(gan.GAN_testX,gan.GAN_testY))
 
 
 
