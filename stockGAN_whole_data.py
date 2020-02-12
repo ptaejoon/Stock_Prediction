@@ -252,6 +252,7 @@ class GAN():
         pickle.dump(trainSTOCK,open('trainSTOCK.sav','wb'))
         pickle.dump(testX,open('testX.sav','wb'))
         pickle.dump(testY,open('testY.sav','wb'))
+        pickle.dump(testSTOCK,open('testSTOCK.sav','wb'))
         pickle.dump(self.scaler,open('scaler.sav','wb'))
         print("Data Saving Done")
         return trainX,trainY,trainSTOCK,testX,testY,testSTOCK
