@@ -9,9 +9,18 @@ import datetime
 from sklearn.preprocessing import MinMaxScaler
 import pickle
 import os
-from khaiii import KhaiiiApi
-from tokenizer import tokenize
+#from khaiii import KhaiiiApi
+#from tokenizer import tokenize
+"""
+def adv_loss(y):
+    
 
+def gen_loss(y_true,y_pred):
+    return adv_loss(y_pred)+p_loss(y_true,y_pred)+dlp_loss(y_true,y_pred)
+
+def dis_loss(y_true,y_pred):
+    return adv_loss
+"""
 def root_mean_squared_error(y_true, y_pred):
     return keras.backend.sqrt(keras.backend.mean(keras.backend.square(y_pred - y_true)))
 
@@ -28,7 +37,7 @@ class GAN():
         self.stock_size = 795
         self.gen_output = 795
         self.gen_timestep = 10
-        self.scaler = MinMaxScaler()
+        #self.scaler = MinMaxScaler()
         self.gen_feature = self.pv_size+self.stock_size
         self.article = {"host": '127.0.0.1', "port": 3306,
                   "user": 'sinunu', "password": '1q2w3e4r', "db": 'mydb', 'charset': 'utf8'}
@@ -49,14 +58,45 @@ class GAN():
             self.GAN_testY = pickle.load(open('testY.sav','rb'))
             self.GAN_testSTOCK = pickle.load(open('testSTOCK.sav','rb'))
             self.scaler = pickle.load(open('scaler.sav','rb'))
+            trainX_transformed = self.scaler.inverse_transform(self.GAN_trainX[:,:,:self.gen_output].reshape(-1,self.gen_output))
+            testX_transformed = self.scaler.inverse_transform(self.GAN_testX[:,:,:self.gen_output].reshape(-1,self.gen_output))
+            self.GAN_trainY = self.scaler.inverse_transform(self.GAN_trainY)
+            self.GAN_testY = self.scaler.inverse_transform(self.GAN_testY)
+            #print(trainX_transformed.shape)
+            scaling_data = np.vstack([trainX_transformed,testX_transformed,self.GAN_testY,self.GAN_trainY])
+            print(scaling_data.shape)
+            self.scaler = MinMaxScaler()
+            self.scaler.fit(scaling_data)
+            self.scaler.data_min_ = [0] * self.gen_output
+            self.scaler.data_max_ = self.scaler.data_max_*1.3
+            #print(self.scaler.data_min_)
+            #print(self.scaler.data_max_)
+            print(self.scaler.data_min_)
+
+            self.GAN_trainX[:,:,:self.gen_output] = self.scaler.transform(trainX_transformed).reshape(-1,self.gen_timestep,self.gen_output)
+            self.GAN_testX[:,:,:self.gen_output] = self.scaler.transform(testX_transformed).reshape(-1,self.gen_timestep,self.gen_output)
+            self.GAN_trainY = self.scaler.transform(self.GAN_trainY)
+            self.GAN_testY = self.scaler.transform(self.GAN_testY)
+
+            self.GAN_trainSTOCK = self.GAN_trainSTOCK.reshape((-1, (self.gen_timestep - 1), self.gen_output))
+            for idx, stock in enumerate(self.GAN_trainSTOCK):
+                self.GAN_trainSTOCK[idx] = self.scaler.transform(stock)
+            self.GAN_testSTOCK = self.GAN_testSTOCK.reshape((-1, (self.gen_timestep - 1), self.gen_output))
+            for idx, stock in enumerate(self.GAN_testSTOCK):
+                self.GAN_testSTOCK[idx] = self.scaler.transform(stock)
+            # print(self.GAN_trainSTOCK)
+            self.GAN_trainSTOCK = self.GAN_trainSTOCK.reshape((-1, ((self.gen_timestep - 1) * self.gen_output)))
+            self.GAN_testSTOCK = self.GAN_testSTOCK.reshape((-1, ((self.gen_timestep - 1) * self.gen_output)))
+            #print(self.scaler.data_min_)
+
         else:
             print("Data Doesn't Exists. Start Building")
             self.GAN_trainX,self.GAN_trainY,self.GAN_trainSTOCK,self.GAN_testX,self.GAN_testY,self.GAN_testSTOCK = self.build_input()
         print("Training Data Processing Finished")
-        self.generator.compile(loss=root_mean_squared_error,
-                optimizer=keras.optimizers.Adam(0.004, 0.5),metrics=['accuracy'])
+        #self.generator.compile(loss=root_mean_squared_error,
+                #optimizer=keras.optimizers.Adam(0.00002, 0.5),metrics=['accuracy'])
         self.discriminator.compile(loss='binary_crossentropy',
-                optimizer=keras.optimizers.Adam(0.02, 0.5),metrics=['accuracy'])
+                optimizer=keras.optimizers.Adam(0.000002, 0.5),metrics=['accuracy'])
         self.discriminator.trainable = False
 
 
@@ -72,7 +112,7 @@ class GAN():
 
         valid = self.discriminator(inputs=combined_stock)
         self.combined = keras.Model(inputs=[combined_input,past_stock], outputs=valid)
-        self.combined.compile(loss='binary_crossentropy', optimizer=keras.optimizers.Adam(0.02, 0.5))
+        self.combined.compile(loss='binary_crossentropy', optimizer=keras.optimizers.Adam(0.000001, 0.5),metrics=['accuracy'])
         self.combined.summary()
 
     def build_generator(self, LayerName):
@@ -81,7 +121,10 @@ class GAN():
             model.add(keras.layers.LSTM(self.gen_output,batch_input_shape=(self.batch_size,self.gen_timestep,self.gen_feature)))# input_shape=(self.gen_timestep, self.gen_feature)))#return_sequences=True))
         elif LayerName == 'GRU':
             model.add(keras.layers.GRU(self.gen_output, input_shape=(self.gen_timestep, self.gen_feature)))#return_sequences=True))
+        #model.add(keras.layers.ReLU())
         #model.add(keras.layers.BatchNormalization())
+        model.add(keras.layers.Dense(self.gen_output))
+        model.add(keras.layers.ReLU())
         model.add(keras.layers.Reshape((1,self.gen_output)))
         model.summary()
         merged_input = keras.Input(shape=(self.gen_timestep,self.gen_feature))
@@ -89,19 +132,18 @@ class GAN():
 
     def build_discriminator(self):
         model = keras.Sequential()
-
-        model.add(keras.layers.Conv1D(32, kernel_size=5,strides=5,input_shape=(self.gen_timestep,self.stock_size),data_format='channels_first'))
-        #model.add(keras.layers.BatchNormalization())
+        model.add(keras.layers.Conv1D(32, kernel_size=4,strides=2,input_shape=(self.gen_timestep,self.stock_size),data_format='channels_first'))
         model.add(keras.layers.LeakyReLU())
-        model.add(keras.layers.Conv1D(32, kernel_size=3))
+        model.add(keras.layers.Conv1D(64, kernel_size=4,strides=2))
+        model.add(keras.layers.BatchNormalization())
         model.add(keras.layers.LeakyReLU())
-        model.add(keras.layers.Conv1D(32, kernel_size=3))
-        #model.add(keras.layers.BatchNormalization())
+        model.add(keras.layers.Conv1D(128, kernel_size=4,strides=2))
+        model.add(keras.layers.BatchNormalization())
         model.add(keras.layers.LeakyReLU())
-        model.add(keras.layers.MaxPooling1D(pool_size=2))
         model.add(keras.layers.Flatten())
-        model.add(keras.layers.Dense(128, activation='relu'))
-        model.add(keras.layers.Dense(1))
+        model.add(keras.layers.Dense(128))
+        model.add(keras.layers.LeakyReLU())
+        model.add(keras.layers.Dense(1,activation='sigmoid'))
         model.summary()
         estimated_sequence = keras.Input(shape=(self.gen_timestep,self.stock_size))
         return keras.Model(estimated_sequence, model(estimated_sequence),name='disciriminator')
@@ -257,48 +299,61 @@ class GAN():
         print("Data Saving Done")
         return trainX,trainY,trainSTOCK,testX,testY,testSTOCK
 
-    def train(self):
+    def train(self,time):
         # Rescale Data
         batch_size = self.batch_size
-        epochs = int(self.GAN_trainX.shape[0]/batch_size)
+        batch = int(self.GAN_trainX.shape[0]/batch_size)
+        #print(self.GAN_trainSTOCK.shape)
+        #print(self.GAN_trainSTOCK.shape)
+#        self.GAN_trainSTOCK = self.scaler.transform(self.GAN_trainSTOCK)
         half_batch = int(batch_size / 2)
-        for epoch in range(epochs):
-            print("epoch : " + str(epoch))
+        for times in range(time):
+            print("epoch :"+str(times))
+            for epoch in range(batch):
 
-            gen_input = self.GAN_trainX[epoch*batch_size:(epoch+1)*batch_size]
-            #print(gen_input)
-            #print(gen_input.shape)
-            #print(np.isnan((gen_input)))
-            #gen_input = gen_input.reshape((-1,self.gen_timestep,self.gen_feature))
-            #print(gen_input.shape)
-            gen_answer = self.GAN_trainY[epoch*batch_size:(epoch+1)*batch_size]
-            gen_answer = gen_answer.reshape((-1, 1,self.gen_output))
-            gen_stock = self.GAN_trainSTOCK[epoch*batch_size:(epoch+1)*batch_size]
-            #print(gen_stock.shape)
-            gen_stock = gen_stock.reshape((-1,(self.gen_timestep-1),self.gen_output))
-            gen_stock_output = self.generator.predict(gen_input)
-            gen_stock_output = gen_stock_output.reshape((self.batch_size,self.gen_output))
-            gen_stock_output = self.scaler.inverse_transform(gen_stock_output)
-            #print(gen_stock_output)
-            gen_stock_output = gen_stock_output.reshape((-1,1,self.gen_output))
-            #print(gen_answer)
+                gen_input = self.GAN_trainX[epoch*batch_size:(epoch+1)*batch_size]
+                gen_answer = self.GAN_trainY[epoch*batch_size:(epoch+1)*batch_size]
+                gen_answer = gen_answer.reshape((-1, 1, self.gen_output))
+                gen_stock = self.GAN_trainSTOCK[epoch*batch_size:(epoch+1)*batch_size]
+                gen_stock = gen_stock.reshape((-1,(self.gen_timestep-1),self.gen_output))
+                gen_stock_output = self.generator.predict(gen_input)
+                gen_stock_output = gen_stock_output.reshape((self.batch_size,self.gen_output))
+                #gen_stock_output = self.scaler.inverse_transform(gen_stock_output)
+                #print(gen_stock_output)
+                gen_stock_output = gen_stock_output.reshape((-1,1,self.gen_output))
+                #print(gen_answer)
 
-            gen_dis_real_input = np.hstack([gen_stock,gen_answer])#np.append(gen_stock,gen_answer,axis=1)
-            gen_dis_fake_input = np.hstack([gen_stock,gen_stock_output])#np.append(gen_stock,gen_stock_output,axis=1)
-            #print(gen_stock_output)
-            #print(gen_dis_fake_input)
-            #print(gen_dis_real_input)
-            d_loss_real = self.discriminator.train_on_batch(gen_dis_real_input,np.ones((batch_size,1)))
-            d_loss_fake = self.discriminator.train_on_batch(gen_dis_fake_input,np.zeros((batch_size,1)))
-            #print("fake")
-            #print(d_loss_fake)
-            #print("real")
-            #print(d_loss_real)
-            d_loss = 0.5 * np.add(d_loss_real,d_loss_fake)
-            valid = np.array([1]*batch_size)
-            g_loss = self.combined.train_on_batch([gen_input,gen_stock],valid)#gen_answer)
-            print(str(epoch) + ' [D loss : ' + str(d_loss[0]) + ', acc : ' +
-                    str(100*d_loss[1])+'] [ G loss : '+str(g_loss))
+                gen_dis_real_input = np.hstack([gen_stock,gen_answer])#np.append(gen_stock,gen_answer,axis=1)
+                gen_dis_fake_input = np.hstack([gen_stock,gen_stock_output])#np.append(gen_stock,gen_stock_output,axis=1)
+                #print(gen_dis_fake_input.shape)
+                #print("real:",gen_dis_real_input[-1])
+                #print("fake:",gen_dis_fake_input[-1])
+                #print(gen_stock_output)
+                #print(gen_answer)
+                #print(gen_dis_fake_input)
+                #print(gen_dis_real_input)
+                d_loss_real = self.discriminator.train_on_batch(gen_dis_real_input,np.ones((batch_size,1)))
+                d_loss_fake = self.discriminator.train_on_batch(gen_dis_fake_input,np.zeros((batch_size,1)))
+               # print("fake",d_loss_fake)
+               # print("real",d_loss_real)
+                d_loss = 0.5 * np.add(d_loss_real,d_loss_fake)
+                valid = np.array([1]*batch_size)
+                g_loss = self.combined.train_on_batch([gen_input,gen_stock],valid)#gen_answer)
+                print(str(epoch) + ' [D real loss : ' + str(d_loss_real[0]) + ', D fake loss: '+str(d_loss_fake[0])+' D real acc : ' + str(d_loss_real[1])+' D fake acc : '+str(d_loss_fake[1])+' D total acc :' +
+                     str(100 * d_loss[1]) + '] [ G loss : ' + str(g_loss))
+                # print(str(epoch) + ' [D loss : ' + str(d_loss[0]) + ', acc : ' +
+                #        str(100*d_loss[1])+'] [ G loss : '+str(g_loss))
+
+             predict_result = self.generator.predict(self.GAN_trainX).reshape(-1, self.gen_output)
+            # print(str(time) + ' [D real loss : ' + str(d_loss_real[0]) + ', D fake loss: ' + str(d_loss_fake[0]) + ' D real acc : ' + str(d_loss_real[1]) + ' D fake acc : ' + str(d_loss_fake[1]) + ' D total acc :' +
+            #                            str(100 * d_loss[1]) + '] [ G loss : ' + str(g_loss))
+            #print(str(epoch) + ' [D loss : ' + str(d_loss[0]) + ', acc : ' +
+            #        str(100*d_loss[1])+'] [ Ggan loss : '+str(g_loss))
+            print(self.scaler.inverse_transform(predict_result))
+            print(self.scaler.inverse_transform(self.GAN_trainY))
+            #print(self.predict_testSet())
+            #print(self.scaler.inverse_transform(self.GAN_testY))
+            print(np.sum(np.abs((self.scaler.inverse_transform(predict_result) - self.scaler.inverse_transform(self.GAN_trainY)))))
 
     def predict(self, days):  # y hat
         articleDBconnect = pymysql.connect(
@@ -347,10 +402,16 @@ class GAN():
         predict_result = self.generator.predict(testSet).reshape(-1,self.gen_output)
         return self.scaler.inverse_transform(predict_result)
 
+    def predict_trainSet(self):
+        trainSet = self.GAN_trainX
+        predict_result = self.generator.predict(trainSet).reshape(-1,self.gen_output)
+        return self.scaler.inverse_transform(predict_result)
+
 if __name__ == '__main__':
-    gan = GAN(batch_size=20)
-    gan.train()
-    days = datetime.datetime(2020, 1, 2, 15, 30, 0)
-    price2019 = gan.predict_testSet()
-    print(price2019)
-    print(gan.scaler.inverse_transform(gan.GAN_testY))
+    gan = GAN(batch_size=50)
+    #print(gan.scaler.inverse_transform(gan.GAN_testY))
+    gan.train(30)
+    #days = datetime.datetime(2020, 1, 2, 15, 30, 0)
+    #price2019 = gan.predict_testSet()
+    #print(price2019)
+
