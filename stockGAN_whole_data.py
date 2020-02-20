@@ -408,9 +408,13 @@ class GAN():
         return self.scaler.inverse_transform(predict_result)
 
 if __name__ == '__main__':
-    gan = GAN(batch_size=50)
     #print(gan.scaler.inverse_transform(gan.GAN_testY))
-    gan.train(30)
+    if os.path.isfile('GAN.sav') is False:
+        gan = GAN(batch_size=40)
+        gan.train(2)
+        pickle.dump(gan, open('GAN.sav', 'wb'))
+    else :
+        gan = pickle.load(open('GAN.sav', 'rb'))
     #days = datetime.datetime(2020, 1, 2, 15, 30, 0)
     #price2019 = gan.predict_testSet()
     #print(price2019)
