@@ -92,7 +92,7 @@ class GAN():
         #self.generator.compile(loss=root_mean_squared_error,
                 #optimizer=keras.optimizers.Adam(0.00002, 0.5),metrics=['accuracy'])
         self.discriminator.compile(loss='binary_crossentropy',
-                optimizer=keras.optimizers.Adam(0.000001, 0.5),metrics=['accuracy'])
+                optimizer=keras.optimizers.Adam(0.0000003, 0.5),metrics=['accuracy'])
         self.discriminator.trainable = False
 
         combined_input = keras.Input(shape=((self.gen_timestep),self.gen_feature),name='stock_news_input')
@@ -108,7 +108,7 @@ class GAN():
         valid = self.discriminator(inputs=combined_stock)
         self.combined = keras.models.Model(inputs=[combined_input, past_stock], outputs=valid)
 
-        self.combined.compile(loss='binary_crossentropy', optimizer=keras.optimizers.Adam(0.000001, 0.5))
+        self.combined.compile(loss='binary_crossentropy', optimizer=keras.optimizers.Adam(0.0000001, 0.5))
         self.combined.summary()
         if os.path.isfile('GAN.h5') is True:
             self.load()
@@ -330,6 +330,9 @@ class GAN():
                      str(100 * d_loss[1]) + '] [ G loss : ' + str(g_loss))
 
             predict_result = self.generator.predict(self.GAN_trainX).reshape(-1, self.gen_output)
+
+            if times % 10 == 0:
+                self.save(times)
             print(self.scaler.inverse_transform(predict_result))
             print(self.scaler.inverse_transform(self.GAN_trainY))
             #print(self.predict_testSet())
@@ -388,10 +391,10 @@ class GAN():
         predict_result = self.generator.predict(trainSet).reshape(-1,self.gen_output)
         return self.scaler.inverse_transform(predict_result)
 
-    def save(self):
-        self.combined.save_weights('%s-%d.h5' % ("GAN", 0))
-        self.generator.save_weights('%s-AB-%d.h5' % ("gen", 0))
-        self.discriminator.save_weights('%s-BA-%d.h5' % ("dis", 0))
+    def save(self,epoch):
+        self.combined.save_weights('train/%s-%d.h5' % ("GAN", epoch))
+        self.generator.save_weights('train/%s-%d.h5' % ("gen", epoch))
+        self.discriminator.save_weights('train/%s-%d.h5' % ("dis", epoch))
         # self.discriminator.trainable = False
         # #keras.models.save_model(self.combined,'GAN.h5')
         # #self.combined.save_weights('GANWeight.h5')
@@ -405,10 +408,10 @@ class GAN():
         # #self.discriminator.save_weights('disWeight.h5')
         print("Save Done")
 
-    def load(self):
-        self.combined.load_weights('%s-%d.h5' % ("GAN", 0))
-        self.generator.load_weights('%s-AB-%d.h5' % ("gen", 0))
-        self.discriminator.load_weights('%s-BA-%d.h5' % ("dis", 0))
+    def load(self,epoch):
+        self.combined.load_weights('train/%s-%d.h5' % ("GAN", epoch))
+        self.generator.load_weights('train/%s-%d.h5' % ("gen", epoch))
+        self.discriminator.load_weights('%train/%s-%d.h5' % ("dis", epoch))
         # self.discriminator = tf.keras.models.load_model('dis.h5')
         # #self.discriminator.load_weights('disWeight.h5')
         # self.generator = tf.keras.models.load_model('gen.h5')
@@ -430,14 +433,12 @@ class GAN():
 
 if __name__ == '__main__':
     #print(gan.scaler.inverse_transform(gan.GAN_testY))
-    if os.path.isfile('GAN.h5') is False:
-        gan = GAN(batch_size=40)
-        gan.train(1)
-        gan.train(1)
-        gan.save()
+    if os.path.isfile('train/GAN-0.h5') is False:
+        gan = GAN(batch_size=20)
+        gan.train(50)
     else :
         gan = GAN(batch_size=40)
-        gan.load()
+        gan.load(50)
         gan.train(5)
         #gan = pickle.load(open('GAN.sav', 'rb'))
     #days = datetime.datetime(2020, 1, 2, 15, 30, 0)
