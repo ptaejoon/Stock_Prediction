@@ -19,7 +19,7 @@ def dis_loss(y_true,y_pred):
     return adv_loss
 """
 
-def numpy_one_day_data(self, newsDB, stockDB, days, pv):
+def numpy_one_day_data(newsDB, stockDB, days, pv):
     end = days
     start = days + datetime.timedelta(days=-1)
     if days.year % 2 == 0:
@@ -38,7 +38,7 @@ def numpy_one_day_data(self, newsDB, stockDB, days, pv):
     stockCur.execute(stock_sql, (start, end))
     stockData = stockCur.fetchall()
     count = 1
-    returnVec = np.zeros(self.pv_size)
+    #returnVec = np.zeros(self.pv_size)
     while len(stockData) < 1:
         # newsCur.execute(news_sql, (start, end))
         # article_same_day = newsCur.fetchall()
@@ -75,17 +75,17 @@ def numpy_one_day_data(self, newsDB, stockDB, days, pv):
     end = end + datetime.timedelta(days=1)
     return stockData, end
 
-def changeLSTMsetX(self, Xdata):
+def changeLSTMsetX( Xdata):
     X = []
     for i in range(len(Xdata)):
         x = Xdata[i:(i + 10)]
-        if (i + self.gen_timestep) < len(Xdata):
+        if (i + 10) < len(Xdata):
             X.append(x)
         else:
             break
     return np.array(X)
 
-def build_input(self):
+def build_input():
     article = {"host": '127.0.0.1', "port": 3306,
                     "user": 'sinunu', "password": '1q2w3e4r', "db": 'mydb', 'charset': 'utf8'}
     index = {"host": '127.0.0.1', "port": 3306,
@@ -121,7 +121,7 @@ def build_input(self):
     scaler = MinMaxScaler()
     while days.year < 2019:
         # for i in range(50):
-        stock, days = self.numpy_one_day_data(articleDBconnect, stockDBconnect, days, pv_model)
+        stock, days = numpy_one_day_data(articleDBconnect, stockDBconnect, days, pv_model)
         #np_pv = np.vstack([np_pv, oneday])
         np_stock = np.vstack([np_stock, stock])
         # trainX = np.vstack([trainX, oneday])
@@ -147,7 +147,7 @@ def build_input(self):
     np_stock = np.empty(795)
     while days.year < 2020:
         # for iter in range(15):
-        stock, days = self.numpy_one_day_data(articleDBconnect, stockDBconnect, days, pv_model)
+        stock, days = numpy_one_day_data(articleDBconnect, stockDBconnect, days, pv_model)
         # testX = np.vstack([testX, oneday])
         # np_pv = np.vstack([np_pv, oneday])
         np_stock = np.vstack([np_stock, stock])
@@ -173,5 +173,6 @@ def build_input(self):
     pickle.dump(trainX_STOCK, open('trainX_STOCK.sav', 'wb'))
     pickle.dump(testY, open('testY.sav', 'wb'))
     pickle.dump(testX_STOCK, open('testX_STOCK.sav', 'wb'))
-    pickle.dump(self.scaler, open('scaler.sav', 'wb'))
+    pickle.dump(scaler, open('scaler.sav', 'wb'))
     print("Data Saving Done")
+build_input()
