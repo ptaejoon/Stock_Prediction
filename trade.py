@@ -4,14 +4,16 @@ from PyQt5.QAxContainer import *
 from PyQt5.QtCore import *
 import time
 import os
+from datetime import datetime
 
-TR_REQ_TIME_INTERVAL = 0.2
 
 class Kiwoom(QAxWidget):
     def __init__(self):
         super().__init__()
         self._create_kiwoom_instance()
         self._set_signal_slots()
+        self.TR_REQ_TIME_INTERVAL = 0.2
+        self.start_date = datetime(2010, 1, 1)
 
     def _create_kiwoom_instance(self):
         self.setControl("KHOPENAPI.KHOpenAPICtrl.1")
@@ -20,6 +22,8 @@ class Kiwoom(QAxWidget):
         self.OnEventConnect.connect(self._event_connect)
         self.OnReceiveTrData.connect(self._receive_tr_data)
         self.OnReceiveChejanData.connect(self._receive_chejan_data)
+        self.OnReceiveRealData.connect(self._receive_real_data)
+        self.OnReceiveMsg.connect(self._receive_msg)
 
     def comm_connect(self):
         self.dynamicCall("CommConnect()")
@@ -32,11 +36,24 @@ class Kiwoom(QAxWidget):
         
     def _receive_chejan_data(self, gubun, item_cnt, fid_list):
         print(gubun)
-        print("Hi")
         print(self.get_chejan_data(9203))
         print(self.get_chejan_data(302))
         print(self.get_chejan_data(900))
         print(self.get_chejan_data(901))
+        self.order_event_loop.exit()
+
+    def _receive_real_data(self, code, realtype, realdata):
+        price = self._get_comm_real_data(code, 10)
+        vol = self._get_comm_real_data(code, 13)
+        print("code: ", code, "price: ", price, "volume: ", vol)
+
+    def _receive_msg(self, scrno, rqname, trcode, msg):
+        print(scrno)
+        print(rqname)
+        print(trcode)
+        print(msg)
+        self.real_event_loop.exit()
+
 
     def _event_connect(self, err_code):
         if err_code == 0:
@@ -64,8 +81,11 @@ class Kiwoom(QAxWidget):
         self.tr_event_loop.exec_()
 
     def _get_comm_data(self, code, field_name, index, item_name):
-        ret = self.dynamicCall("GetCommData(QString, QString, int, QString", code,
-                               field_name, index, item_name)
+        ret = self.dynamicCall("GetCommData(QString, QString, int, QString", code, field_name, index, item_name)
+        return ret.strip()
+
+    def _get_comm_real_data(self, code, fid):
+        ret = self.dynamicCall("GetCommRealData(QString, int)", [code, fid])
         return ret.strip()
 
     def _get_repeat_cnt(self, trcode, rqname):
@@ -127,15 +147,20 @@ class Kiwoom(QAxWidget):
 
     def _opt10081(self, rqname, trcode):
         data_cnt = self._get_repeat_cnt(trcode, rqname)
-
+        
         for i in range(data_cnt):
             date = self._get_comm_data(trcode, rqname, i, "일자")
+            if self.result:
+                if datetime.strptime(date, "%Y%m%d") < self.start_date:
+                    self.remained_data = False
+                    return
             open = self._get_comm_data(trcode, rqname, i, "시가")
             high = self._get_comm_data(trcode, rqname, i, "고가")
             low = self._get_comm_data(trcode, rqname, i, "저가")
             close = self._get_comm_data(trcode, rqname, i, "현재가")
             volume = self._get_comm_data(trcode, rqname, i, "거래량")
-            print(date, open, high, low, close, volume)
+            # print(date, open, high, low, close, volume)
+            self.result.append([date, open, high, low, close, volume])
 
     def _opt10080(self, rqname, trcode):
         data_cnt = self._get_repeat_cnt(trcode, rqname)
@@ -279,8 +304,19 @@ class Kiwoom(QAxWidget):
         print(time)
 
     def _opt10086(self, rqname, trcode):
-        price = self._get_comm_data(trcode, rqname, 0, "시가")
-        print(price)
+        data_cnt = self._get_repeat_cnt(trcode, rqname)
+        for i in range(data_cnt):
+            date = self._get_comm_data(trcode, rqname, i, "날짜")
+            if datetime.strptime(date, "%Y%m%d") < self.start_date:
+                self.remained_data = False
+                return
+            end_price = self._get_comm_data(trcode, rqname, i, "종가")
+            start_price = self._get_comm_data(trcode, rqname, i, "시가")
+            high_price = self._get_comm_data(trcode, rqname, i, "고가")
+            low_price = self._get_comm_data(trcode, rqname, i, "저가")
+            volume = self._get_comm_data(trcode, rqname, i, "거래량")
+            print(date, end_price, start_price, high_price, low_price, volume)
+            self.result.append([date, end_price, start_price, high_price, low_price, volume])
 
     def _opw00004(self, rqname, trcode):
         deposit = self._get_comm_data(trcode, rqname, 0, "예수금")
@@ -293,6 +329,7 @@ class Kiwoom(QAxWidget):
     def _opw00007(self, rqname, trcode):
         data_cnt = self._get_repeat_cnt(trcode, rqname)
         for i in range(data_cnt):
+            time.sleep(self.TR_REQ_TIME_INTERVAL)
             num = self._get_comm_data(trcode, rqname, i, "주문번호")
             name = self._get_comm_data(trcode, rqname, i, "종목명")
             time = self._get_comm_data(trcode, rqname, i, "주문시간")
@@ -305,13 +342,13 @@ class Kiwoom(QAxWidget):
     #     기준일자 = YYYYMMDD (20160101 연도4자리, 월 2자리, 일 2자리 형식)
     #     수정주가구분 = 0 or 1, 수신데이터 1:유상증자, 2:무상증자, 4:배당락, 8:액면분할, 16:액면병합, 32:기업합병, 64:감자, 256:권리락
     def day_stockdata_req(self, code, date, sujung):
+        self.result = []
         self.set_input_value("종목코드", code)
         self.set_input_value("기준일자", date)
         self.set_input_value("수정주가구분", sujung)
         self.comm_rq_data("opt10081_req", "opt10081", 0, "0101")
-        return
         while self.remained_data == True:
-            time.sleep(TR_REQ_TIME_INTERVAL)
+            time.sleep(self.TR_REQ_TIME_INTERVAL)
             self.set_input_value("종목코드", code)
             self.set_input_value("기준일자", date)
             self.set_input_value("수정주가구분", sujung)
@@ -328,7 +365,7 @@ class Kiwoom(QAxWidget):
         self.comm_rq_data("opt10080_req", "opt10080", 0, "0102")
 
         while self.remained_data == True:
-            time.sleep(TR_REQ_TIME_INTERVAL)
+            time.sleep(self.TR_REQ_TIME_INTERVAL)
             self.set_input_value("종목코드", code)
             self.set_input_value("틱범위", minute)
             self.set_input_value("수정주가구분", sujung)
@@ -345,7 +382,7 @@ class Kiwoom(QAxWidget):
         self.comm_rq_data("opt10079_req", "opt10079", 0, "0103")
 
         while self.remained_data == True:
-            time.sleep(TR_REQ_TIME_INTERVAL)
+            time.sleep(self.TR_REQ_TIME_INTERVAL)
             self.set_input_value("종목코드", code)
             self.set_input_value("틱범위", tick)
             self.set_input_value("수정주가구분", sujung)
@@ -381,7 +418,7 @@ class Kiwoom(QAxWidget):
         self.comm_rq_data("opt10083_req", "opt10083", 0, "0105")
 
         while self.remained_data == True:
-            time.sleep(TR_REQ_TIME_INTERVAL)
+            time.sleep(self.TR_REQ_TIME_INTERVAL)
             self.set_input_value("종목코드", code)
             self.set_input_value("기준일자", date)
             self.set_input_value("끝일자", lastdate)
@@ -401,7 +438,7 @@ class Kiwoom(QAxWidget):
         self.comm_rq_data("opt10003_req", "opt10003", 0, "0107")
         
         while self.remained_data == True:
-            time.sleep(TR_REQ_TIME_INTERVAL)
+            time.sleep(self.TR_REQ_TIME_INTERVAL)
             self.set_input_value("send_order", code)
             self.comm_rq_data("opt10003_req", "opt10003", 2, "0107")
 
@@ -410,7 +447,7 @@ class Kiwoom(QAxWidget):
         self.comm_rq_data("opt10085_req", "opt10085", 0, "0108")
 
         while self.remained_data == True:
-            time.sleep(TR_REQ_TIME_INTERVAL)
+            time.sleep(self.TR_REQ_TIME_INTERVAL)
             self.set_input_value("계좌번호", acc_num)
             self.comm_rq_data("opt10085_req", "opt10085", 2, "0108")
 
@@ -433,8 +470,8 @@ class Kiwoom(QAxWidget):
         #   81 : 장후시간외종가
     def send_order(self, order_type, code, quantity, price, hoga, order_no):
         self.dynamicCall("SendOrder(QString, QString, QString, int, QString, int, int, QString, QString)",["send_order", "1010", "8130142611", order_type, code, quantity, price, hoga, order_no])
-        self.tr_event_loop = QEventLoop()
-        self.tr_event_loop.exec_()
+        self.order_event_loop = QEventLoop()
+        self.order_event_loop.exec_()
 
     # [ opt10004 : 주식호가요청 ]
 	# 종목코드 = 전문 조회할 종목코드
@@ -519,10 +556,18 @@ class Kiwoom(QAxWidget):
     # 	조회일자 = YYYYMMDD (20160101 연도4자리, 월 2자리, 일 2자리 형식)
     # 	표시구분 = 0:수량, 1:금액(백만원)
     def per_day_stockprice_req(self, code, date, present):
+        self.result = []
         self.set_input_value("종목코드",  code)
         self.set_input_value("조회일자", date)
         self.set_input_value("표시구문",  present)
         self.comm_rq_data("opt10086_req", "opt10086", 0, "0118")
+
+        while self.remained_data == True:
+            time.sleep(self.TR_REQ_TIME_INTERVAL)
+            self.set_input_value("종목코드",  code)
+            self.set_input_value("조회일자", date)
+            self.set_input_value("표시구문",  present)
+            self.comm_rq_data("opt10086_req", "opt10086", 2, "0118")
 
 #     [ OPW00004 : 계좌평가현황요청 ]
 #     계좌번호 = 전문 조회할 보유계좌번호
@@ -555,7 +600,7 @@ class Kiwoom(QAxWidget):
         self.comm_rq_data("opw00007_req", "opw00007", 0, "0120")
 
         while self.remained_data == True:
-            time.sleep(TR_REQ_TIME_INTERVAL)
+            time.sleep(self.TR_REQ_TIME_INTERVAL)
             self.set_input_value("주문일자",  date)
             self.set_input_value("계좌번호",  "8130142611")
             self.set_input_value("비밀번호",  "")
@@ -567,9 +612,47 @@ class Kiwoom(QAxWidget):
             self.set_input_value("시작주문번호",  "")
             self.comm_rq_data("opw00007_req", "opw00007", 2, "0120")
 
+    # [ 실시간 정보 받아오기 ]
+    # strScreenNo = “0001” (화면번호)
+    # strCodeList = “039490;005930;…” (종목코드 리스트)
+    # strFidList = “9001;10;13;…” (FID 번호 리스트)
+    # strOptType = “0” (타입)
+    def get_real_data(self, codearr, fidarr, opt):
+        self.dynamicCall("SetRealReg(QString, QString, QString, QString)", ["0121", codearr, fidarr, opt])
+        self.real_event_loop = QEventLoop()
+        self.real_event_loop.exec_()
+
+    def remove_real_data(self, codearr):
+        self.dynamicCall("SetRealRemove(QString, QString)", ["ALL", codearr])
+        self.real_event_loop = QEventLoop()
+        self.real_event_loop.exec_()
+
+'''
+실시간 데이터 조회의 경우 KOA에서 조건검색의 setRealReg를 참고할 것
+'''
+
 if __name__ == "__main__":
-    #update_api()
     app = QApplication(sys.argv)
     kiwoom = Kiwoom()
     kiwoom.comm_connect()
-    kiwoom.day_stockdata_req("271560", '20200217', "256")
+    # kiwoom.send_order("2", "006840", "1", "", "03", "")
+    kiwoom.remove_real_data("ALL")
+
+
+    # [ 주식 매수, 취소, 정정 관련 함수]
+    #  LONG OrderType,  // 주문유형 1:신규매수, 2:신규매도 3:매수취소, 4:매도취소, 5:매수정정, 6:매도정정
+    #  Hoga
+        #   00 : 지정가
+        #   03 : 시장가
+        #   05 : 조건부지정가
+        #   06 : 최유리지정가
+        #   07 : 최우선지정가
+        #   10 : 지정가IOC
+        #   13 : 시장가IOC
+        #   16 : 최유리IOC
+        #   20 : 지정가FOK
+        #   23 : 시장가FOK
+        #   26 : 최유리FOK
+        #   61 : 장전시간외종가
+        #   62 : 시간외단일가매매
+        #   81 : 장후시간외종가
