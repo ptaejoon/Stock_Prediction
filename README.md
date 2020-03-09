@@ -1,5 +1,5 @@
 # Stock_Prediction
-Code about GAN is in stockGAN_v*.
+Code about GAN is in stockGAN_v*.<br> All files outside folders are for testing.<br> Codes about Crawling and Database are in Crawling folder. 
 
 v1:<br>
 First Model in project.<br>
