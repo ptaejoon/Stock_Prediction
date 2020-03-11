@@ -7,46 +7,68 @@ import os
 from datetime import datetime
 import pickle
 import numpy as np
+import pymysql
+import pdb
 
 class Kiwoom(QAxWidget):
-    def __init__(self):
+    def __init__(self, tax = 1.01, gijun = 0.02, addr = ""):
         super().__init__()
         self._create_kiwoom_instance()
         self._set_signal_slots()
         self.TR_REQ_TIME_INTERVAL = 0.2
         self.start_date = datetime(2010, 1, 1)
-        self.corp = [('006840', 'AK홀딩스'), ('001040', 'CJ'), ('079160', 'CJ CGV'), ('000120', 'CJ대한통운'), ('097950', 'CJ제일제당'),
-             ('005830', 'DB손해보험'), ('000990', 'DB하이텍'), ('114090', 'GKL'), ('078930', 'GS'), ('006360', 'GS건설'),
-             ('012630', 'HDC'), ('001060', 'JW중외제약'), ('096760', 'JW홀딩스'), ('105560', 'KB금융'), ('002380', 'KCC'),
-             ('030200', 'KT'), ('033780', 'KT&G'), ('093050', 'LF'), ('003550', 'LG'), ('034220', 'LG디스플레이'),
-             ('001120', 'LG상사'), ('051900', 'LG생활건강'), ('032640', 'LG유플러스'), ('011070', 'LG이노텍'), ('066570', 'LG전자'),
-             ('108670', 'LG하우시스'), ('051910', 'LG화학'), ('006260', 'LS'), ('010120', 'LS산전'), ('035420', 'NAVER'),
-             ('005940', 'NH투자증권'), ('010060', 'OCI'), ('005490', 'POSCO'), ('064960', 'S&T모티브'), ('010950', 'S-Oil'),
-             ('034730', 'SK'), ('011790', 'SKC'), ('001740', 'SK네트웍스'), ('006120', 'SK디스커버리'), ('096770', 'SK이노베이션'),
-             ('017670', 'SK텔레콤'), ('000660', 'SK하이닉스'), ('005610', 'SPC삼립'), ('035250', '강원랜드'), ('010130', '고려아연'),
-             ('002240', '고려제강'), ('011780', '금호석유'), ('073240', '금호타이어'), ('000270', '기아차'), ('024110', '기업은행'),
-             ('003920', '남양유업'), ('025860', '남해화학'), ('002350', '넥센타이어'), ('006280', '녹십자'), ('005250', '녹십자홀딩스'),
-             ('004370', '농심'), ('019680', '대교'), ('008060', '대덕전자'), ('000210', '대림산업'), ('001680', '대상'),
-             ('047040', '대우건설'), ('042660', '대우조선해양'), ('069620', '대웅제약'), ('006650', '대한유화'), ('003490', '대한항공'),
-             ('001230', '동국제강'), ('026960', '동서'), ('000640', '동아쏘시오홀딩스'), ('001520', '동양'), ('049770', '동원F&B'),
-             ('014820', '동원시스템즈'), ('000150', '두산'), ('042670', '두산인프라코어'), ('034020', '두산중공업'), ('023530', '롯데쇼핑'),
-             ('004000', '롯데정밀화학'), ('004990', '롯데지주'), ('005300', '롯데칠성'), ('011170', '롯데케미칼'), ('002270', '롯데푸드'),
-             ('008560', '메리츠종금증권'), ('006800', '미래에셋대우'), ('003850', '보령제약'), ('003000', '부광약품'), ('005180', '빙그레'),
-             ('006400', '삼성SDI'), ('028050', '삼성엔지니어링'), ('009150', '삼성전기'), ('005930', '삼성전자'), ('010140', '삼성중공업'),
-             ('016360', '삼성증권'), ('029780', '삼성카드'), ('000810', '삼성화재'), ('000070', '삼양홀딩스'), ('004490', '세방전지'),
-             ('001430', '세아베스틸'), ('068270', '셀트리온'), ('004170', '신세계'), ('055550', '신한지주'), ('003410', '쌍용양회'),
-             ('003620', '쌍용차'), ('002790', '아모레G'), ('090430', '아모레퍼시픽'), ('010780', '아이에스동서'), ('005850', '에스엘'),
-             ('012750', '에스원'), ('036570', '엔씨소프트'), ('111770', '영원무역'), ('003520', '영진약품'), ('000670', '영풍'),
-             ('007310', '오뚜기'), ('001800', '오리온홀딩스'), ('021240', '웅진코웨이'), ('014830', '유니드'), ('000100', '유한양행'),
-             ('007570', '일양약품'), ('030000', '제일기획'), ('035720', '카카오'), ('003240', '태광산업'), ('028670', '팬오션'),
-             ('047050', '포스코인터내셔널'), ('103140', '풍산'), ('086790', '하나금융지주'), ('000080', '하이트진로'), ('036460', '한국가스공사'),
-             ('071050', '한국금융지주'), ('025540', '한국단자'), ('002960', '한국쉘석유'), ('015760', '한국전력'), ('009540', '한국조선해양'),
-             ('000240', '한국테크놀로지그룹'), ('008930', '한미사이언스'), ('009240', '한샘'), ('020000', '한섬'), ('105630', '한세실업'),
-             ('014680', '한솔케미칼'), ('018880', '한온시스템'), ('009420', '한올바이오파마'), ('006390', '한일현대시멘트'),
-             ('051600', '한전KPS'), ('052690', '한전기술'), ('000880', '한화'), ('012450', '한화에어로스페이스'), ('009830', '한화케미칼'),
-             ('000720', '현대건설'), ('005440', '현대그린푸드'), ('086280', '현대글로비스'), ('079430', '현대리바트'), ('012330', '현대모비스'),
-             ('010620', '현대미포조선'), ('069960', '현대백화점'), ('017800', '현대엘리베이'), ('004020', '현대제철'), ('005380', '현대차'),
-             ('001450', '현대해상'), ('008770', '호텔신라'), ('004800', '효성'), ('093370', '후성'), ('069260', '휴켐스')]
+        self.realmode = False
+        self.corp = [['006840', 'AK홀딩스'], ['001040', 'CJ'], ['079160', 'CJ CGV'], ['000120', 'CJ대한통운'], ['097950', 'CJ제일제당'],
+             ['005830', 'DB손해보험'], ['000990', 'DB하이텍'], ['114090', 'GKL'], ['078930', 'GS'], ['006360', 'GS건설'],
+             ['012630', 'HDC'], ['001060', 'JW중외제약'], ['096760', 'JW홀딩스'], ['105560', 'KB금융'], ['002380', 'KCC'],
+             ['030200', 'KT'], ['033780', 'KT&G'], ['093050', 'LF'], ['003550', 'LG'], ['034220', 'LG디스플레이'],
+             ['001120', 'LG상사'], ['051900', 'LG생활건강'], ['032640', 'LG유플러스'], ['011070', 'LG이노텍'], ['066570', 'LG전자'],
+             ['108670', 'LG하우시스'], ['051910', 'LG화학'], ['006260', 'LS'], ['010120', 'LS산전'], ['035420', 'NAVER'],
+             ['005940', 'NH투자증권'], ['010060', 'OCI'], ['005490', 'POSCO'], ['064960', 'S&T모티브'], ['010950', 'S-Oil'],
+             ['034730', 'SK'], ['011790', 'SKC'], ['001740', 'SK네트웍스'], ['006120', 'SK디스커버리'], ['096770', 'SK이노베이션'],
+             ['017670', 'SK텔레콤'], ['000660', 'SK하이닉스'], ['005610', 'SPC삼립'], ['035250', '강원랜드'], ['010130', '고려아연'],
+             ['002240', '고려제강'], ['011780', '금호석유'], ['073240', '금호타이어'], ['000270', '기아차'], ['024110', '기업은행'],
+             ['003920', '남양유업'], ['025860', '남해화학'], ['002350', '넥센타이어'], ['006280', '녹십자'], ['005250', '녹십자홀딩스'],
+             ['004370', '농심'], ['019680', '대교'], ['008060', '대덕전자'], ['000210', '대림산업'], ['001680', '대상'],
+             ['047040', '대우건설'], ['042660', '대우조선해양'], ['069620', '대웅제약'], ['006650', '대한유화'], ['003490', '대한항공'],
+             ['001230', '동국제강'], ['026960', '동서'], ['000640', '동아쏘시오홀딩스'], ['001520', '동양'], ['049770', '동원F&B'],
+             ['014820', '동원시스템즈'], ['000150', '두산'], ['042670', '두산인프라코어'], ['034020', '두산중공업'], ['023530', '롯데쇼핑'],
+             ['004000', '롯데정밀화학'], ['004990', '롯데지주'], ['005300', '롯데칠성'], ['011170', '롯데케미칼'], ['002270', '롯데푸드'],
+             ['008560', '메리츠종금증권'], ['006800', '미래에셋대우'], ['003850', '보령제약'], ['003000', '부광약품'], ['005180', '빙그레'],
+             ['006400', '삼성SDI'], ['028050', '삼성엔지니어링'], ['009150', '삼성전기'], ['005930', '삼성전자'], ['010140', '삼성중공업'],
+             ['016360', '삼성증권'], ['029780', '삼성카드'], ['000810', '삼성화재'], ['000070', '삼양홀딩스'], ['004490', '세방전지'],
+             ['001430', '세아베스틸'], ['068270', '셀트리온'], ['004170', '신세계'], ['055550', '신한지주'], ['003410', '쌍용양회'],
+             ['003620', '쌍용차'], ['002790', '아모레G'], ['090430', '아모레퍼시픽'], ['010780', '아이에스동서'], ['005850', '에스엘'],
+             ['012750', '에스원'], ['036570', '엔씨소프트'], ['111770', '영원무역'], ['003520', '영진약품'], ['000670', '영풍'],
+             ['007310', '오뚜기'], ['001800', '오리온홀딩스'], ['021240', '웅진코웨이'], ['014830', '유니드'], ['000100', '유한양행'],
+             ['007570', '일양약품'], ['030000', '제일기획'], ['035720', '카카오'], ['003240', '태광산업'], ['028670', '팬오션'],
+             ['047050', '포스코인터내셔널'], ['103140', '풍산'], ['086790', '하나금융지주'], ['000080', '하이트진로'], ['036460', '한국가스공사'],
+             ['071050', '한국금융지주'], ['025540', '한국단자'], ['002960', '한국쉘석유'], ['015760', '한국전력'], ['009540', '한국조선해양'],
+             ['000240', '한국테크놀로지그룹'], ['008930', '한미사이언스'], ['009240', '한샘'], ['020000', '한섬'], ['105630', '한세실업'],
+             ['014680', '한솔케미칼'], ['018880', '한온시스템'], ['009420', '한올바이오파마'], ['006390', '한일현대시멘트'],
+             ['051600', '한전KPS'], ['052690', '한전기술'], ['000880', '한화'], ['012450', '한화에어로스페이스'], ['009830', '한화케미칼'],
+             ['000720', '현대건설'], ['005440', '현대그린푸드'], ['086280', '현대글로비스'], ['079430', '현대리바트'], ['012330', '현대모비스'],
+             ['010620', '현대미포조선'], ['069960', '현대백화점'], ['017800', '현대엘리베이'], ['004020', '현대제철'], ['005380', '현대차'],
+             ['001450', '현대해상'], ['008770', '호텔신라'], ['004800', '효성'], ['093370', '후성'], ['069260', '휴켐스']]
+        # self.corp [(code, corp_name, 시가, 종가, high, low), ...]
+        self.corp = np.array(self.corp)
+        predict = np.load("predict.npy")
+        predict = predict[0].reshape([159, 4]) # 나중에 수정 필요!
+        self.corp = np.concatenate((self.corp, predict), axis = 1)
+        conn = pymysql.connect(host='sp-articledb.clwrfz92pdul.ap-northeast-2.rds.amazonaws.com', user = 'admin', password='sogangsp', db='mydb', charset='utf8', port=3306)
+        curs = conn.cursor()
+        curs.execute("select * from stock where trade_time = (select trade_time from stock order by trade_time desc limit 1)")
+        close_price = curs.fetchall()
+        conn.close()
+        for i, row in enumerate(self.corp):
+            for j in range(2, len(row)):
+                row[j] = round(float(row[j]) * close_price[i][2])
+        self.btn = QPushButton("exit", self)
+        self.btn.clicked.connect(self._exit_process)
+        self.tax = tax
+        self.gijun = gijun
+        self.setWindowTitle("stock trade")
+        self.show()
 
     def _create_kiwoom_instance(self):
         self.setControl("KHOPENAPI.KHOpenAPICtrl.1")
@@ -58,6 +80,7 @@ class Kiwoom(QAxWidget):
         self.OnReceiveRealData.connect(self._receive_real_data)
         self.OnReceiveRealCondition.connect(self._receive_real_condition)
         self.OnReceiveConditionVer.connect(self._receive_condition_ver)
+        
 
     def comm_connect(self):
         self.dynamicCall("CommConnect()")
@@ -74,24 +97,35 @@ class Kiwoom(QAxWidget):
         print(self.get_chejan_data(302))
         print(self.get_chejan_data(900))
         print(self.get_chejan_data(901))
-        self.order_event_loop.exit()
 
+    # self.corp에서 회사의 index를 찾는다
+    def _get_corp_index(self, code):
+        for i in range(len(self.corp)):
+            if self.corp[i][0] == code:
+                return i
+
+    # 실시간 데이터 획득
     def _receive_real_data(self, code, realtype, realdata):
-        price = self._get_comm_real_data(code, 10)
-        vol = self._get_comm_real_data(code, 13)
-        print("code: ", code, "price: ", price, "volume: ", vol)
+        if not self.realmode:
+            return
+        price = int(self._get_comm_real_data(code, 10))
+        index = self._get_corp_index(code)
+        if price * 1.01 < self.corp[index][2]:
+            # if price * 1.01 < self.corp[index][3]:
+            #     self.send_order(1, self.corp[index][1], 2, price, "00", "")
+            # else:
+            self.send_order(1, self.corp[index][0], 1, price, "00", "")
+            print("buy : ", code)
 
     def _receive_real_condition(self, code, event, condname, condind):
         print(code)
         print(event)
         print(condname)
         print(condind)
-        self.real_event_loop.exit()
 
     def _receive_condition_ver(self, ret, msg):
         print(ret)
         print(msg)
-        self.real_event_loop.exit()
 
     def _event_connect(self, err_code):
         if err_code == 0:
@@ -100,6 +134,12 @@ class Kiwoom(QAxWidget):
             print("disconnected")
 
         self.login_event_loop.exit()
+
+    def _exit_process(self):
+        print("Process is finished")
+        self.remove_real_data()
+        self.real_event_loop.exit()
+
 
     def get_code_list_by_market(self, market):
         code_list = self.dynamicCall("GetCodeListByMarket(QString)", market)
@@ -192,12 +232,12 @@ class Kiwoom(QAxWidget):
                 if datetime.strptime(date, "%Y%m%d") < self.start_date:
                     self.remained_data = False
                     return
-            open = self._get_comm_data(trcode, rqname, i, "시가")
-            high = self._get_comm_data(trcode, rqname, i, "고가")
-            low = self._get_comm_data(trcode, rqname, i, "저가")
-            close = self._get_comm_data(trcode, rqname, i, "현재가")
-            volume = self._get_comm_data(trcode, rqname, i, "거래량")
-            print(date, open, high, low, close, volume)
+            open = int(self._get_comm_data(trcode, rqname, i, "시가"))
+            high = int(self._get_comm_data(trcode, rqname, i, "고가"))
+            low = int(self._get_comm_data(trcode, rqname, i, "저가"))
+            close = int(self._get_comm_data(trcode, rqname, i, "현재가"))
+            volume = int(self._get_comm_data(trcode, rqname, i, "거래량"))
+            # print(date, open, high, low, close, volume)
             self.result.append([date, open, high, low, close, volume])
 
     def _opt10080(self, rqname, trcode):
@@ -508,8 +548,6 @@ class Kiwoom(QAxWidget):
         #   81 : 장후시간외종가
     def send_order(self, order_type, code, quantity, price, hoga, order_no):
         self.dynamicCall("SendOrder(QString, QString, QString, int, QString, int, int, QString, QString)",["send_order", "1010", "8130142611", order_type, code, quantity, price, hoga, order_no])
-        self.order_event_loop = QEventLoop()
-        self.order_event_loop.exec_()
 
     # [ opt10004 : 주식호가요청 ]
 	# 종목코드 = 전문 조회할 종목코드
@@ -656,30 +694,37 @@ class Kiwoom(QAxWidget):
     # strFidList = “9001;10;13;…” (FID 번호 리스트)
     # strOptType = “0” (타입)
     def get_real_data(self, codearr, fidarr, opt):
+        self.realmode = True
         self.dynamicCall("SetRealReg(QString, QString, QString, QString)", ["0121", codearr, fidarr, opt])
         self.real_event_loop = QEventLoop()
         self.real_event_loop.exec_()
 
-    def remove_real_data(self, codearr):
+    def remove_real_data(self):
+        self.realmode = False
         self.dynamicCall("SetRealRemove(QString, QString)", ["ALL", "ALL"])
-        self.real_event_loop = QEventLoop()
-        self.real_event_loop.exec_()
 
-'''
-실시간 데이터 조회의 경우 KOA에서 조건검색의 setRealReg를 참고할 것
-'''
-def load_predict_file():
-    with open("predict.pickle", "rb") as f:
-        predict = pickle.load(f)
-        return predict.reshape([159, 4])
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     kiwoom = Kiwoom()
     kiwoom.comm_connect()
-    #kiwoom.day_stockdata_req("005930", "20200214", "256")
-    # kiwoom.remove_real_data("005930")
-
+    kiwoom.day_stockdata_req("006840", "20200303", "256")
+    for row in kiwoom.result:
+        print(row)
+    # num = 0
+    # for row in kiwoom.result:
+    #     if row[3] * 1.03 < row[4]:
+    #         num += 1
+    #         print(row[0], "/", row[3], row[4], round((row[4]/row[3] - 1) * 100, 2), "%")
+    # print("count : ", num)  
+    # eunwoo_corp = ""
+    # for i in range(100):
+    #     eunwoo_corp += kiwoom.corp[i][0]
+    #     if i != 99:
+    #         eunwoo_corp +=";"
+    # print(eunwoo_corp)
+    # kiwoom.get_real_data("005930;000660", "9001;10", "0")
 
     # [ 주식 매수, 취소, 정정 관련 함수]
     #  LONG OrderType,  // 주문유형 1:신규매수, 2:신규매도 3:매수취소, 4:매도취소, 5:매수정정, 6:매도정정
