@@ -28,8 +28,19 @@ v2:
     High,Low,Min,Max has changed to percentile comparing Close price of last day.
     Volume has changed to certain value based on experiment. You can find the method at 'stockGAN_v2/udf_scaler.py'.
     Result : GAN model is still running. 
-    Lowest Average Error on Validation Data till now : 1.2 %
-    estimated annual return in 2019 : 660 % (We doubt it's overfitted, so we are trying to verify with 2020 stock prices)
+    Lowest Average Error on Validation Data (2019) 
+        Average Open Price error : 0.83 %
+        Average Close Price Error : 1.46 %
+        Average High Price Error : 1.23 %
+        Average Low Price Error : 1.13 %
+        estimated annual return in 2019 : 633 %
+    
+    Lowest Average Error on Validation Data (2020.1~2) 
+        Average Open Price error : 1.15 %
+        Average Close Price Error : 1.9 %
+        Average High Price Error : 1.58 %
+        Average Low Price Error : 1.4 %
+        estimated annual return in 2020.1~2 : -385 %
 
 v3:
 
