@@ -8,65 +8,40 @@ from datetime import datetime
 import pickle
 import numpy as np
 import pymysql
-import pdb
 
 class Kiwoom(QAxWidget):
-    def __init__(self, tax = 1.01, gijun = 0.02, addr = ""):
+    def __init__(self, addr = "",  tax = 1.01, gijun = 0.02, maxpay = 200000, account="8131649311"):
         super().__init__()
         self._create_kiwoom_instance()
         self._set_signal_slots()
         self.TR_REQ_TIME_INTERVAL = 0.2
         self.start_date = datetime(2010, 1, 1)
         self.realmode = False
-        self.corp = [['006840', 'AK홀딩스'], ['001040', 'CJ'], ['079160', 'CJ CGV'], ['000120', 'CJ대한통운'], ['097950', 'CJ제일제당'],
-             ['005830', 'DB손해보험'], ['000990', 'DB하이텍'], ['114090', 'GKL'], ['078930', 'GS'], ['006360', 'GS건설'],
-             ['012630', 'HDC'], ['001060', 'JW중외제약'], ['096760', 'JW홀딩스'], ['105560', 'KB금융'], ['002380', 'KCC'],
-             ['030200', 'KT'], ['033780', 'KT&G'], ['093050', 'LF'], ['003550', 'LG'], ['034220', 'LG디스플레이'],
-             ['001120', 'LG상사'], ['051900', 'LG생활건강'], ['032640', 'LG유플러스'], ['011070', 'LG이노텍'], ['066570', 'LG전자'],
-             ['108670', 'LG하우시스'], ['051910', 'LG화학'], ['006260', 'LS'], ['010120', 'LS산전'], ['035420', 'NAVER'],
-             ['005940', 'NH투자증권'], ['010060', 'OCI'], ['005490', 'POSCO'], ['064960', 'S&T모티브'], ['010950', 'S-Oil'],
-             ['034730', 'SK'], ['011790', 'SKC'], ['001740', 'SK네트웍스'], ['006120', 'SK디스커버리'], ['096770', 'SK이노베이션'],
-             ['017670', 'SK텔레콤'], ['000660', 'SK하이닉스'], ['005610', 'SPC삼립'], ['035250', '강원랜드'], ['010130', '고려아연'],
-             ['002240', '고려제강'], ['011780', '금호석유'], ['073240', '금호타이어'], ['000270', '기아차'], ['024110', '기업은행'],
-             ['003920', '남양유업'], ['025860', '남해화학'], ['002350', '넥센타이어'], ['006280', '녹십자'], ['005250', '녹십자홀딩스'],
-             ['004370', '농심'], ['019680', '대교'], ['008060', '대덕전자'], ['000210', '대림산업'], ['001680', '대상'],
-             ['047040', '대우건설'], ['042660', '대우조선해양'], ['069620', '대웅제약'], ['006650', '대한유화'], ['003490', '대한항공'],
-             ['001230', '동국제강'], ['026960', '동서'], ['000640', '동아쏘시오홀딩스'], ['001520', '동양'], ['049770', '동원F&B'],
-             ['014820', '동원시스템즈'], ['000150', '두산'], ['042670', '두산인프라코어'], ['034020', '두산중공업'], ['023530', '롯데쇼핑'],
-             ['004000', '롯데정밀화학'], ['004990', '롯데지주'], ['005300', '롯데칠성'], ['011170', '롯데케미칼'], ['002270', '롯데푸드'],
-             ['008560', '메리츠종금증권'], ['006800', '미래에셋대우'], ['003850', '보령제약'], ['003000', '부광약품'], ['005180', '빙그레'],
-             ['006400', '삼성SDI'], ['028050', '삼성엔지니어링'], ['009150', '삼성전기'], ['005930', '삼성전자'], ['010140', '삼성중공업'],
-             ['016360', '삼성증권'], ['029780', '삼성카드'], ['000810', '삼성화재'], ['000070', '삼양홀딩스'], ['004490', '세방전지'],
-             ['001430', '세아베스틸'], ['068270', '셀트리온'], ['004170', '신세계'], ['055550', '신한지주'], ['003410', '쌍용양회'],
-             ['003620', '쌍용차'], ['002790', '아모레G'], ['090430', '아모레퍼시픽'], ['010780', '아이에스동서'], ['005850', '에스엘'],
-             ['012750', '에스원'], ['036570', '엔씨소프트'], ['111770', '영원무역'], ['003520', '영진약품'], ['000670', '영풍'],
-             ['007310', '오뚜기'], ['001800', '오리온홀딩스'], ['021240', '웅진코웨이'], ['014830', '유니드'], ['000100', '유한양행'],
-             ['007570', '일양약품'], ['030000', '제일기획'], ['035720', '카카오'], ['003240', '태광산업'], ['028670', '팬오션'],
-             ['047050', '포스코인터내셔널'], ['103140', '풍산'], ['086790', '하나금융지주'], ['000080', '하이트진로'], ['036460', '한국가스공사'],
-             ['071050', '한국금융지주'], ['025540', '한국단자'], ['002960', '한국쉘석유'], ['015760', '한국전력'], ['009540', '한국조선해양'],
-             ['000240', '한국테크놀로지그룹'], ['008930', '한미사이언스'], ['009240', '한샘'], ['020000', '한섬'], ['105630', '한세실업'],
-             ['014680', '한솔케미칼'], ['018880', '한온시스템'], ['009420', '한올바이오파마'], ['006390', '한일현대시멘트'],
-             ['051600', '한전KPS'], ['052690', '한전기술'], ['000880', '한화'], ['012450', '한화에어로스페이스'], ['009830', '한화케미칼'],
-             ['000720', '현대건설'], ['005440', '현대그린푸드'], ['086280', '현대글로비스'], ['079430', '현대리바트'], ['012330', '현대모비스'],
-             ['010620', '현대미포조선'], ['069960', '현대백화점'], ['017800', '현대엘리베이'], ['004020', '현대제철'], ['005380', '현대차'],
-             ['001450', '현대해상'], ['008770', '호텔신라'], ['004800', '효성'], ['093370', '후성'], ['069260', '휴켐스']]
-        # self.corp [(code, corp_name, 시가, 종가, high, low), ...]
-        self.corp = np.array(self.corp)
-        predict = np.load("predict.npy")
-        predict = predict[0].reshape([159, 4]) # 나중에 수정 필요!
-        self.corp = np.concatenate((self.corp, predict), axis = 1)
+        # self.corp [(code, corp_name, 시가, 종가, high, low, 구매수, 미체결수, 구매액), ...]
         conn = pymysql.connect(host='sp-articledb.clwrfz92pdul.ap-northeast-2.rds.amazonaws.com', user = 'admin', password='sogangsp', db='mydb', charset='utf8', port=3306)
         curs = conn.cursor()
-        curs.execute("select * from stock where trade_time = (select trade_time from stock order by trade_time desc limit 1)")
-        close_price = curs.fetchall()
+        curs.execute('select * from predict_stock where trade_time = "'+datetime.today().strftime("%Y%m%d")+'"')
+        self.corp = np.array(curs.fetchall())
+        self.corp = np.concatenate((self.corp[:, -1].reshape(self.corp.shape[0], 1), self.corp[:, 1:-1], np.zeros((self.corp.shape[0], 3), dtype=int)), axis = 1)
+        curs.execute("select corp_name from stock where trade_time = '20200310' order by close_price limit 100;")
+        corp100 = np.array(curs.fetchall())
+        corp100 = corp100[:, 0]
         conn.close()
-        for i, row in enumerate(self.corp):
-            for j in range(2, len(row)):
-                row[j] = round(float(row[j]) * close_price[i][2])
+        corp_del_index = []
+        for i, each_corp in enumerate(self.corp):
+            if each_corp[1] not in corp100:
+                corp_del_index.append(i)
+        self.corp = np.delete(self.corp, corp_del_index, axis=0)
+        self.corp = self.corp.tolist()
+        for row in self.corp:
+            row[7] = {}
         self.btn = QPushButton("exit", self)
         self.btn.clicked.connect(self._exit_process)
         self.tax = tax
         self.gijun = gijun
+        self.maxpay = maxpay
+        self.selltime = datetime.today().replace(hour=15, minute=10, second=0)
+        self.account = account
         self.setWindowTitle("stock trade")
         self.show()
 
@@ -90,13 +65,33 @@ class Kiwoom(QAxWidget):
     def get_chejan_data(self, fid):
         ret = self.dynamicCall("GetChejanData(int)", fid)
         return ret
-        
+    
+    # 주식 구매 후 체결 관련 이벤트 수행
     def _receive_chejan_data(self, gubun, item_cnt, fid_list):
         print(gubun)
-        print(self.get_chejan_data(9203))
-        print(self.get_chejan_data(302))
-        print(self.get_chejan_data(900))
-        print(self.get_chejan_data(901))
+        code = self.get_chejan_data(9001)
+        code = code[1:]
+        ordernum = self.get_chejan_data(9203)
+        notpaid = self.get_chejan_data(902)
+        if notpaid:
+            notpaid = int(notpaid)
+        else:
+            notpaid = 0
+        paid = self.get_chejan_data(911)
+        if paid:
+            paid = int(paid)
+        else:
+            paid = 0
+        index = self._get_corp_index(code)
+        self.corp[index][6] += paid
+        if not self.corp[index][7]:
+            self.corp[index][7][ordernum] = notpaid
+        elif ordernum not in self.corp[index][7].keys():
+            self.corp[index][7][ordernum] = notpaid
+        elif notpaid == 0:
+            del self.corp[index][7][ordernum]
+        else:
+            self.corp[index][7][ordernum] = notpaid
 
     # self.corp에서 회사의 index를 찾는다
     def _get_corp_index(self, code):
@@ -108,14 +103,27 @@ class Kiwoom(QAxWidget):
     def _receive_real_data(self, code, realtype, realdata):
         if not self.realmode:
             return
-        price = int(self._get_comm_real_data(code, 10))
         index = self._get_corp_index(code)
-        if price * 1.01 < self.corp[index][2]:
-            # if price * 1.01 < self.corp[index][3]:
-            #     self.send_order(1, self.corp[index][1], 2, price, "00", "")
-            # else:
-            self.send_order(1, self.corp[index][0], 1, price, "00", "")
-            print("buy : ", code)
+        if datetime.now() > self.selltime:
+            print("장 마감 20분 전 입니다. 모든 물량을 매도합니다.")
+            for row in self.corp:
+                if row[6]:
+                    if row[7]:
+                        for order in row[7]:
+                            self.send_order(3, row[0], row[7][order], 0, "03", order)
+                    else:
+                        self.send_order(3, row[0], row[6], 0, "03", "")
+            self._exit_process()
+            return
+        price = self._get_comm_real_data(code, 10)
+        if not price:
+            return
+        price = abs(int(price))
+        if price * (self.tax + self.gijun) < self.corp[index][2] and self.corp[index][8] + price  < self.maxpay:
+            paynum = (self.maxpay - self.corp[index][8]) // price
+            self.send_order(1, self.corp[index][0], paynum, price, "00", "")
+            self.corp[index][8] += price * paynum
+            print(self.corp[index][1], "를", paynum, "개 구매")
 
     def _receive_real_condition(self, code, event, condname, condind):
         print(code)
@@ -397,12 +405,20 @@ class Kiwoom(QAxWidget):
             self.result.append([date, end_price, start_price, high_price, low_price, volume])
 
     def _opw00004(self, rqname, trcode):
-        deposit = self._get_comm_data(trcode, rqname, 0, "예수금")
-        print(deposit)
-        month_profit = self._get_comm_data(trcode, rqname, 0, "누적손익율")
-        print(month_profit)
-        profit = self._get_comm_data(trcode, rqname, 0, "손익율")
-        print(profit)
+        self.result = []
+        data_cnt = self._get_repeat_cnt(trcode, rqname)
+        for i in range(data_cnt):
+            code = self._get_comm_data(trcode, rqname, i, "종목코드")
+            corp_name = self._get_comm_data(trcode, rqname, i, "종목명")
+            corp_num = self._get_comm_data(trcode, rqname, i, "보유수량")
+            if corp_num:
+                corp_num = int(corp_num)
+            current_price = self._get_comm_data(trcode, rqname, i, "현재가")
+            if current_price:
+                current_price = int(current_price)
+            profit_percent = self._get_comm_data(trcode, rqname, i, "손익율")
+            self.result.append([code[1:], corp_num, current_price])
+            print("종목코드", code[1:], "종목명", corp_name, "보유수량", corp_num, "현재가", current_price, "손익율", profit_percent)
 
     def _opw00007(self, rqname, trcode):
         data_cnt = self._get_repeat_cnt(trcode, rqname)
@@ -547,7 +563,7 @@ class Kiwoom(QAxWidget):
         #   62 : 시간외단일가매매
         #   81 : 장후시간외종가
     def send_order(self, order_type, code, quantity, price, hoga, order_no):
-        self.dynamicCall("SendOrder(QString, QString, QString, int, QString, int, int, QString, QString)",["send_order", "1010", "8130142611", order_type, code, quantity, price, hoga, order_no])
+        self.dynamicCall("SendOrder(QString, QString, QString, int, QString, int, int, QString, QString)",["send_order", "1010", self.account, order_type, code, quantity, price, hoga, order_no])
 
     # [ opt10004 : 주식호가요청 ]
 	# 종목코드 = 전문 조회할 종목코드
@@ -572,7 +588,7 @@ class Kiwoom(QAxWidget):
     # 	시작일자 = YYYYMMDD (20160101 연도4자리, 월 2자리, 일 2자리 형식)
     # 	종료일자 = YYYYMMDD (20160101 연도4자리, 월 2자리, 일 2자리 형식)
     def perday_perstock_realprofit_req(self, code, start_date, end_date):
-        self.set_input_value("계좌번호", "8130142611")
+        self.set_input_value("계좌번호", self.account)
         self.set_input_value("종목코드", code)
         self.set_input_value("시작일자", start_date)
         self.set_input_value("종료일자", end_date)
@@ -584,7 +600,7 @@ class Kiwoom(QAxWidget):
     # 	종목코드 = 전문 조회할 종목코드
     # 	체결구분 = 0:전체, 2:체결, 1:미체결
     def realtime_notperchased_req(self, stockall_flag, buysell_flag, code, contract_flag):
-        self.set_input_value("계좌번호", "8130142611")
+        self.set_input_value("계좌번호", self.account)
         self.set_input_value("전체종목구분", stockall_flag)
         self.set_input_value("매매구분", buysell_flag)
         self.set_input_value("종목코드", code)
@@ -601,7 +617,7 @@ class Kiwoom(QAxWidget):
         self.set_input_value("종목코드",  code)
         self.set_input_value("조회구분",  stockall_flag)
         self.set_input_value("매도수구분", buysell_flag)
-        self.set_input_value("계좌번호", "8130142611")
+        self.set_input_value("계좌번호", self.account)
         self.set_input_value("비밀번호", "")
         self.set_input_value("주문번호", order_num)
         self.set_input_value("체결구분", contract_flag)
@@ -610,7 +626,7 @@ class Kiwoom(QAxWidget):
     #  [ opt10077 : 당일실현손익상세요청 ]
     # 	종목코드 = 전문 조회할 종목코드
     def day_profitloss_req(self, code):
-        self.set_input_value("계좌번호",  "8130142611")
+        self.set_input_value("계좌번호",  self.account)
         self.set_input_value("비밀번호",  "")
         self.set_input_value("종목코드",  code)
         self.comm_rq_data("opt10077_req", "opt10077", 0, "0116")
@@ -651,7 +667,7 @@ class Kiwoom(QAxWidget):
 #     상장폐지조회구분 = 0:전체, 1:상장폐지종목제외
 #     비밀번호입력매체구분 = 00
     def account_evaluation_req(self):
-        self.set_input_value("계좌번호",  "8130142611")
+        self.set_input_value("계좌번호",  self.account)
         self.set_input_value("비밀번호",  "")
         self.set_input_value("상장폐지조회구분",  "0")
         self.set_input_value("비밀번호입력매체구분",  '00')
@@ -665,7 +681,7 @@ class Kiwoom(QAxWidget):
 # 	시작주문번호 = 
     def account_orderdetail_req(self, date, inquiry, sell_buy, code, order_num):
         self.set_input_value("주문일자",  date)
-        self.set_input_value("계좌번호",  "8130142611")
+        self.set_input_value("계좌번호",  self.account)
         self.set_input_value("비밀번호",  "")
         self.set_input_value("비밀번호입력매체구분",  "00")
         self.set_input_value("조회구분",  inquiry)
@@ -678,7 +694,7 @@ class Kiwoom(QAxWidget):
         while self.remained_data == True:
             time.sleep(self.TR_REQ_TIME_INTERVAL)
             self.set_input_value("주문일자",  date)
-            self.set_input_value("계좌번호",  "8130142611")
+            self.set_input_value("계좌번호",  self.account)
             self.set_input_value("비밀번호",  "")
             self.set_input_value("비밀번호입력매체구분",  "00")
             self.set_input_value("조회구분",  inquiry)
@@ -703,43 +719,25 @@ class Kiwoom(QAxWidget):
         self.realmode = False
         self.dynamicCall("SetRealRemove(QString, QString)", ["ALL", "ALL"])
 
-
+    def deal_rest(self):
+        self.account_evaluation_req()
+        for row in self.result:
+            index = self._get_corp_index(row[0])
+            if self.corp[index][2] < row[2]:
+                self.send_order(2, row[0], row[1], "", "03", "")
+            else:
+                self.corp[index][6] = row[1]
+        
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     kiwoom = Kiwoom()
+    #kiwoom 연결
     kiwoom.comm_connect()
-    kiwoom.day_stockdata_req("006840", "20200303", "256")
-    for row in kiwoom.result:
-        print(row)
-    # num = 0
-    # for row in kiwoom.result:
-    #     if row[3] * 1.03 < row[4]:
-    #         num += 1
-    #         print(row[0], "/", row[3], row[4], round((row[4]/row[3] - 1) * 100, 2), "%")
-    # print("count : ", num)  
-    # eunwoo_corp = ""
-    # for i in range(100):
-    #     eunwoo_corp += kiwoom.corp[i][0]
-    #     if i != 99:
-    #         eunwoo_corp +=";"
-    # print(eunwoo_corp)
-    # kiwoom.get_real_data("005930;000660", "9001;10", "0")
-
-    # [ 주식 매수, 취소, 정정 관련 함수]
-    #  LONG OrderType,  // 주문유형 1:신규매수, 2:신규매도 3:매수취소, 4:매도취소, 5:매수정정, 6:매도정정
-    #  Hoga
-        #   00 : 지정가
-        #   03 : 시장가
-        #   05 : 조건부지정가
-        #   06 : 최유리지정가
-        #   07 : 최우선지정가
-        #   10 : 지정가IOC
-        #   13 : 시장가IOC
-        #   16 : 최유리IOC
-        #   20 : 지정가FOK
-        #   23 : 시장가FOK
-        #   26 : 최유리FOK
-        #   61 : 장전시간외종가
-        #   62 : 시간외단일가매매
-        #   81 : 장후시간외종가
+    # 전날 잔량 처리
+    kiwoom.deal_rest()
+    # 실시간 거래
+    real_corp_req = kiwoom.corp[0][0]
+    for row in kiwoom.corp[1:]:
+        real_corp_req += ";"+row[0]
+    kiwoom.get_real_data(real_corp_req, "10", "0")
