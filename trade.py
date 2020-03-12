@@ -315,7 +315,7 @@ class Kiwoom(QAxWidget):
         print("저가: ", low)
 
     def _opt10003(self, rqname, trcode):
-        time = self._get_comm_data(trcode, rqname, 0, "시간")
+        timeval = self._get_comm_data(trcode, rqname, 0, "시간")
         current_price = self._get_comm_data(trcode, rqname, 0, "현재가")
         prevday_ratio = self._get_comm_data(trcode, rqname, 0, "전일대비")
         ratio_percent = self._get_comm_data(trcode, rqname, 0, "대비율")
@@ -325,7 +325,7 @@ class Kiwoom(QAxWidget):
         accum_volume = self._get_comm_data(trcode, rqname, 0, "누적거래량")
         power = self._get_comm_data(trcode, rqname, 0, "체결강도")
 
-        print("시간 :", time)
+        print("시간 :", timeval)
         print("현재가 :", current_price)
         print("전일대비 :", prevday_ratio)
         print("대비율 :", ratio_percent)
@@ -351,9 +351,9 @@ class Kiwoom(QAxWidget):
             buy_price.append(self._get_comm_data(trcode, rqname, 0, "매수"+str(i)+"차선호가"))
             buy_debi.append(self._get_comm_data(trcode, rqname, 0, "매수"+str(i)+"차선잔량대비"))
 
-        time = self._get_comm_data(trcode, rqname, 0, "호가잔량기준시간")
+        timeval = self._get_comm_data(trcode, rqname, 0, "호가잔량기준시간")
         
-        print("time: ", time)
+        print("time: ", timeval)
         print("sell_vol: ", sell_vol)
         print("buy_vol", buy_vol)
         print("sell_price: ", sell_price)
@@ -362,12 +362,12 @@ class Kiwoom(QAxWidget):
         print("buy_debi", buy_debi)
 
     def _opt10005(self, rqname, trcode):
-        time = self._get_comm_data(trcode, rqname, 0, "날짜")
-        print(time)
+        timeval = self._get_comm_data(trcode, rqname, 0, "날짜")
+        print(timeval)
 
     def _opt10007(self, rqname, trcode):
-        time = self._get_comm_data(trcode, rqname, 0, "날짜")
-        print(time)
+        timeval = self._get_comm_data(trcode, rqname, 0, "날짜")
+        print(timeval)
 
     def _opt10073(self, rqname, trcode):
         date = self._get_comm_data(trcode, rqname, 0, "일자")
@@ -386,8 +386,8 @@ class Kiwoom(QAxWidget):
         print(stock_name)
 
     def _opt10084(self, rqname, trcode):
-        time = self._get_comm_data(trcode, rqname, 0, "시간")
-        print(time)
+        timeval = self._get_comm_data(trcode, rqname, 0, "시간")
+        print(timeval)
 
     def _opt10086(self, rqname, trcode):
         data_cnt = self._get_repeat_cnt(trcode, rqname)
@@ -417,8 +417,25 @@ class Kiwoom(QAxWidget):
             if current_price:
                 current_price = int(current_price)
             profit_percent = self._get_comm_data(trcode, rqname, i, "손익율")
-            self.result.append([code[1:], corp_num, current_price])
-            print("종목코드", code[1:], "종목명", corp_name, "보유수량", corp_num, "현재가", current_price, "손익율", profit_percent)
+            today_have = self._get_comm_data(trcode, rqname, i, "금일매수수량")
+            if today_have:
+                today_have = int(today_have)
+            else:
+                today_have = 0
+            prev_pay = self._get_comm_data(trcode, rqname, i, "전일매수수량")
+            if prev_pay:
+                prev_pay = int(prev_pay)
+            else:
+                prev_pay = 0
+            prev_sell = self._get_comm_data(trcode, rqname, i, "전일매도수량")
+            if prev_sell:
+                prev_sell = int(prev_sell)
+            else:
+                prev_sell
+            prev_have = prev_pay - prev_sell
+
+            self.result.append([code[1:], corp_num, current_price, today_have, prev_have])
+            print("종목코드", code[1:], "종목명", corp_name, "보유수량", corp_num, "현재가", current_price, "손익율", profit_percent, "오늘 가진량", today_have, "어제 남은량", prev_have)
 
     def _opw00007(self, rqname, trcode):
         data_cnt = self._get_repeat_cnt(trcode, rqname)
@@ -426,10 +443,10 @@ class Kiwoom(QAxWidget):
             time.sleep(self.TR_REQ_TIME_INTERVAL)
             num = self._get_comm_data(trcode, rqname, i, "주문번호")
             name = self._get_comm_data(trcode, rqname, i, "종목명")
-            time = self._get_comm_data(trcode, rqname, i, "주문시간")
+            timeval = self._get_comm_data(trcode, rqname, i, "주문시간")
             print(num)
             print(name)
-            print(time)
+            print(timeval)
 
     # [ opt10081 : 주식일봉차트조회요청 ]
     #     종목코드 = 전문 조회할 종목코드
@@ -723,10 +740,12 @@ class Kiwoom(QAxWidget):
         self.account_evaluation_req()
         for row in self.result:
             index = self._get_corp_index(row[0])
-            if self.corp[index][2] < row[2]:
-                self.send_order(2, row[0], row[1], "", "03", "")
+            if self.corp[index][2] < row[2] and row[4] > 0:
+                self.send_order(2, row[0], row[4], "", "03", "")
             else:
                 self.corp[index][6] = row[1]
+                if row[3] > 0:
+                    self.corp[index] = row[3] * row[2]
         
 
 if __name__ == "__main__":
@@ -736,6 +755,7 @@ if __name__ == "__main__":
     kiwoom.comm_connect()
     # 전날 잔량 처리
     kiwoom.deal_rest()
+    exit()
     # 실시간 거래
     real_corp_req = kiwoom.corp[0][0]
     for row in kiwoom.corp[1:]:
