@@ -109,10 +109,10 @@ class Kiwoom(QAxWidget):
             for row in self.corp:
                 if row[6]:
                     if row[7]:
-                        for order in row[7]:
+                        for order in row[7]: 
                             self.send_order(3, row[0], row[7][order], 0, "03", order)
                     else:
-                        self.send_order(3, row[0], row[6], 0, "03", "")
+                        self.send_order(3, row[0], row[6], 0, "02", "")
             self._exit_process()
             return
         price = self._get_comm_real_data(code, 10)
@@ -741,11 +741,11 @@ class Kiwoom(QAxWidget):
         for row in self.result:
             index = self._get_corp_index(row[0])
             if self.corp[index][2] < row[2] and row[4] > 0:
-                self.send_order(2, row[0], row[4], "", "03", "")
+                self.send_order(2, row[0], row[4], "", "02", "")
             else:
                 self.corp[index][6] = row[1]
                 if row[3] > 0:
-                    self.corp[index] = row[3] * row[2]
+                    self.corp[index][8] = row[3] * row[2]
         
 
 if __name__ == "__main__":
@@ -755,7 +755,6 @@ if __name__ == "__main__":
     kiwoom.comm_connect()
     # 전날 잔량 처리
     kiwoom.deal_rest()
-    exit()
     # 실시간 거래
     real_corp_req = kiwoom.corp[0][0]
     for row in kiwoom.corp[1:]:
