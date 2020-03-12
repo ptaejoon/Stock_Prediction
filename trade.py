@@ -70,14 +70,23 @@ class Kiwoom(QAxWidget):
     def _receive_chejan_data(self, gubun, item_cnt, fid_list):
         print(gubun)
         code = self.get_chejan_data(9001)
+        code = code[1:]
         ordernum = self.get_chejan_data(9203)
-        notpaid = int(self.get_chejan_data(902))
-        paid = int(self.get_chejan_data(911))
-        if str.isdigit(code[0]):
-            code = code[1:]
+        notpaid = self.get_chejan_data(902)
+        if notpaid:
+            notpaid = int(notpaid)
+        else:
+            notpaid = 0
+        paid = self.get_chejan_data(911)
+        if paid:
+            paid = int(paid)
+        else:
+            paid = 0
         index = self._get_corp_index(code)
         self.corp[index][6] += paid
-        if ordernum not in self.corp[index][7].keys():
+        if not self.corp[index][7]:
+            self.corp[index][7][ordernum] = notpaid
+        elif ordernum not in self.corp[index][7].keys():
             self.corp[index][7][ordernum] = notpaid
         elif notpaid == 0:
             del self.corp[index][7][ordernum]
@@ -106,7 +115,10 @@ class Kiwoom(QAxWidget):
                         self.send_order(3, row[0], row[6], 0, "03", "")
             self._exit_process()
             return
-        price = abs(int(self._get_comm_real_data(code, 10)))
+        price = self._get_comm_real_data(code, 10)
+        if not price:
+            return
+        price = abs(int(price))
         if price * (self.tax + self.gijun) < self.corp[index][2] and self.corp[index][8] + price  < self.maxpay:
             paynum = (self.maxpay - self.corp[index][8]) // price
             self.send_order(1, self.corp[index][0], paynum, price, "00", "")
@@ -405,8 +417,8 @@ class Kiwoom(QAxWidget):
             if current_price:
                 current_price = int(current_price)
             profit_percent = self._get_comm_data(trcode, rqname, i, "손익율")
-            self.append([code, corp_num, current_price])
-            print("종목코드", code, "종목명", corp_name, "보유수량", corp_num, "현재가", current_price, "손익율", profit_percent)
+            self.result.append([code[1:], corp_num, current_price])
+            print("종목코드", code[1:], "종목명", corp_name, "보유수량", corp_num, "현재가", current_price, "손익율", profit_percent)
 
     def _opw00007(self, rqname, trcode):
         data_cnt = self._get_repeat_cnt(trcode, rqname)
@@ -709,10 +721,10 @@ class Kiwoom(QAxWidget):
 
     def deal_rest(self):
         self.account_evaluation_req()
-        for row in self.corp:
-            index = self._get_corp_index(row[0][1:])
+        for row in self.result:
+            index = self._get_corp_index(row[0])
             if self.corp[index][2] < row[2]:
-                self.send_order(2, row[0][1:], row[1], "", "03", "")
+                self.send_order(2, row[0], row[1], "", "03", "")
             else:
                 self.corp[index][6] = row[1]
         
