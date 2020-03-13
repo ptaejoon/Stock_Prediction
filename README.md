@@ -54,3 +54,11 @@ v4:
     Rescaled Stock Data of v2 to -1 and 1 to broaden the predictable range.
     Result : GAN model is still running.
     Lowest Average Error on Validation Data till now : 1.9 %
+
+v5:
+    
+    Returns only Close, Max price as Generator's output.
+    Result : much high error rate than v2~4.
+<br>
+trade.py: Code for autonomous stock trade.<br>
+validate.py : Code to evaluate model's proficiency. Used 2019 and 2020.1~2 data for validation. <br>
