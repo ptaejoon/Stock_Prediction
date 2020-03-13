@@ -33,14 +33,12 @@ v2:
         Average Close Price Error : 1.46 %
         Average High Price Error : 1.23 %
         Average Low Price Error : 1.13 %
-        estimated annual return in 2019 : 633 %
-    
+
     Lowest Average Error on Validation Data (2020.1~2) 
         Average Open Price error : 1.15 %
         Average Close Price Error : 1.9 %
         Average High Price Error : 1.58 %
         Average Low Price Error : 1.4 %
-        estimated annual return in 2020.1~2 : -385 %
 
 v3:
 
