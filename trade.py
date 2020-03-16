@@ -10,11 +10,11 @@ import numpy as np
 import pymysql
 
 class Kiwoom(QAxWidget):
-    def __init__(self, addr = "",  tax = 1.01, gijun = 0.02, maxpay = 200000, account="8131649311"):
+    def __init__(self, addr = "",  tax = 1.0096, gijun = 0.02, maxpay = 200000, account="8131649311"):
         super().__init__()
         self._create_kiwoom_instance()
         self._set_signal_slots()
-        self.TR_REQ_TIME_INTERVAL = 0.2
+        self.TR_REQ_TIME_INTERVAL = 0.4
         self.start_date = datetime(2010, 1, 1)
         self.realmode = False
         # self.corp [(code, corp_name, 시가, 종가, high, low, 구매수, 미체결수, 구매액), ...]
@@ -98,12 +98,14 @@ class Kiwoom(QAxWidget):
         for i in range(len(self.corp)):
             if self.corp[i][0] == code:
                 return i
+        raise NameError("_get_corp_index error"+code+": 해당 code를 100개 기업 중에서 찾을 수 없습니다.")
 
     # 실시간 데이터 획득
     def _receive_real_data(self, code, realtype, realdata):
         if not self.realmode:
             return
         index = self._get_corp_index(code)
+        # 장 마감 20분 전 모든 물량 매도 시작
         if datetime.now() > self.selltime:
             print("장 마감 20분 전 입니다. 모든 물량을 매도합니다.")
             for row in self.corp:
@@ -116,6 +118,7 @@ class Kiwoom(QAxWidget):
             self._exit_process()
             return
         price = self._get_comm_real_data(code, 10)
+        # pirce를 오류로 인해 못받은 경우 
         if not price:
             return
         price = abs(int(price))
@@ -225,6 +228,8 @@ class Kiwoom(QAxWidget):
             self._opw00004(rqname, trcode)
         elif rqname == 'opw00007_req':
             self._opw00007(rqname, trcode)
+        elif rqname == 'opt10030_req':
+            self._opt10030(rqname, trcode)
             
         try:
             self.tr_event_loop.exit()
@@ -263,14 +268,23 @@ class Kiwoom(QAxWidget):
     def _opt10079(self, rqname, trcode):
         data_cnt = self._get_repeat_cnt(trcode, rqname)
 
-        for i in range(data_cnt):
+        date = self._get_comm_data(trcode, rqname, 0, "체결시간")
+        open = self._get_comm_data(trcode, rqname, 0, "시가")
+        high = self._get_comm_data(trcode, rqname, 0, "고가")
+        low = self._get_comm_data(trcode, rqname, 0, "저가")
+        close = self._get_comm_data(trcode, rqname, 0, "현재가")
+        volume = self._get_comm_data(trcode, rqname, 0, "거래량")
+        self.result.append([date, open, high, low, close, volume])
+        print(date)
+        for i in range(1, data_cnt):
             date = self._get_comm_data(trcode, rqname, i, "체결시간")
             open = self._get_comm_data(trcode, rqname, i, "시가")
             high = self._get_comm_data(trcode, rqname, i, "고가")
             low = self._get_comm_data(trcode, rqname, i, "저가")
             close = self._get_comm_data(trcode, rqname, i, "현재가")
             volume = self._get_comm_data(trcode, rqname, i, "거래량")
-            print(date, open, high, low, close, volume)
+            self.result.append([date, open, high, low, close, volume])
+            #print(date, open, high, low, close, volume)
 
     def _opt10082(self, rqname, trcode):
         data_cnt = self._get_repeat_cnt(trcode, rqname)
@@ -405,14 +419,13 @@ class Kiwoom(QAxWidget):
             self.result.append([date, end_price, start_price, high_price, low_price, volume])
 
     def _opw00004(self, rqname, trcode):
-        self.result = []
         data_cnt = self._get_repeat_cnt(trcode, rqname)
         for i in range(data_cnt):
             code = self._get_comm_data(trcode, rqname, i, "종목코드")
             corp_name = self._get_comm_data(trcode, rqname, i, "종목명")
-            corp_num = self._get_comm_data(trcode, rqname, i, "보유수량")
-            if corp_num:
-                corp_num = int(corp_num)
+            corp_have = self._get_comm_data(trcode, rqname, i, "보유수량")
+            if corp_have:
+                corp_have = int(corp_have)
             current_price = self._get_comm_data(trcode, rqname, i, "현재가")
             if current_price:
                 current_price = int(current_price)
@@ -422,20 +435,10 @@ class Kiwoom(QAxWidget):
                 today_have = int(today_have)
             else:
                 today_have = 0
-            prev_pay = self._get_comm_data(trcode, rqname, i, "전일매수수량")
-            if prev_pay:
-                prev_pay = int(prev_pay)
-            else:
-                prev_pay = 0
-            prev_sell = self._get_comm_data(trcode, rqname, i, "전일매도수량")
-            if prev_sell:
-                prev_sell = int(prev_sell)
-            else:
-                prev_sell
-            prev_have = prev_pay - prev_sell
+            prev_have = corp_have - today_have
 
-            self.result.append([code[1:], corp_num, current_price, today_have, prev_have])
-            print("종목코드", code[1:], "종목명", corp_name, "보유수량", corp_num, "현재가", current_price, "손익율", profit_percent, "오늘 가진량", today_have, "어제 남은량", prev_have)
+            self.result.append([code[1:], corp_have, current_price, today_have, prev_have])
+            print("종목코드", code[1:], "종목명", corp_name, "보유수량", corp_have, "현재가", current_price, "손익율", profit_percent, "오늘 가진량", today_have, "남은량", prev_have)
 
     def _opw00007(self, rqname, trcode):
         data_cnt = self._get_repeat_cnt(trcode, rqname)
@@ -447,6 +450,14 @@ class Kiwoom(QAxWidget):
             print(num)
             print(name)
             print(timeval)
+    
+    def _opt10030(self, rqname, trcode):
+        data_cnt = self._get_repeat_cnt(trcode, rqname)
+        for i in range(data_cnt):
+            code = self._get_comm_data(trcode, rqname, i, "종목코드")
+            name = self._get_comm_data(trcode, rqname, i, "종목명")
+            volume = self._get_comm_data(trcode, rqname, i, "거래량")
+            print("종목코드", code, "종목명", name, "거래량", volume)
 
     # [ opt10081 : 주식일봉차트조회요청 ]
     #     종목코드 = 전문 조회할 종목코드
@@ -487,6 +498,7 @@ class Kiwoom(QAxWidget):
     #     틱범위 = 1:1틱, 3:3틱, 5:5틱, 10:10틱, 30:30틱
     #     수정주가구분 = 0 or 1, 수신데이터 1:유상증자, 2:무상증자, 4:배당락, 8:액면분할, 16:액면병합, 32:기업합병, 64:감자, 256:권리락
     def tick_stockdata_req(self, code, tick, sujung):
+        self.result = []
         self.set_input_value("종목코드", code)
         self.set_input_value("틱범위", tick)
         self.set_input_value("수정주가구분", sujung)
@@ -678,6 +690,34 @@ class Kiwoom(QAxWidget):
             self.set_input_value("표시구문",  present)
             self.comm_rq_data("opt10086_req", "opt10086", 2, "0118")
 
+    #  [ opt10030 : 당일거래량상위요청 ]
+    # 	시장구분 = 000:전체, 001:코스피, 101:코스닥
+    # 	관리종목포함 = 0:관리종목 포함, 1:관리종목 미포함, 3:우선주제외, 11:정리매매종목제외, 4:관리종목, 우선주제외, 5:증100제외, 6:증100마나보기, 13:증60만보기,          12:증50만보기, 7:증40만보기, 8:증30만보기, 9:증20만보기, 14:ETF제외, 15:스팩제외, 16:ETF+ETN제외
+    # 	신용구분 = 0:전체조회, 9:신용융자전체, 1:신용융자A군, 2:신용융자B군, 3:신용융자C군, 4:신용융자D군, 8:신용대주
+    # 	거래량구분 = 0:전체조회, 5:5천주이상, 10:1만주이상, 50:5만주이상, 100:10만주이상, 200:20만주이상, 300:30만주이상, 500:500만주이상, 1000:백만주이상
+    def today_highest_tradeaccount(self, market, management, credit_crit, volume_crit):
+        self.SetInputValue("시장구분", market)
+        self.SetInputValue("정렬구분", "1")
+        self.SetInputValue("관리종목포함", management)
+        self.SetInputValue("신용구분", credit_crit)
+        self.SetInputValue("거래량구분", volume_crit)
+        self.SetInputValue("가격구분", "0")
+        self.SetInputValue("거래대금구분", "0")
+        self.SetInputValue("장운영구분", "1")
+        self.comm_rq_data("opt10030_req", "opt10030", 0, "0121")
+
+        while self.remained_data == True:
+            time.sleep(self.TR_REQ_TIME_INTERVAL)
+            self.SetInputValue("시장구분", market)
+            self.SetInputValue("정렬구분", "1")
+            self.SetInputValue("관리종목포함", management)
+            self.SetInputValue("신용구분", credit_crit)
+            self.SetInputValue("거래량구분", volume_crit)
+            self.SetInputValue("가격구분", "0")
+            self.SetInputValue("거래대금구분", "0")
+            self.SetInputValue("장운영구분", "1")
+            self.comm_rq_data("opt10030_req", "opt10030", 2, "0121")
+
 #     [ OPW00004 : 계좌평가현황요청 ]
 #     계좌번호 = 전문 조회할 보유계좌번호
 #     비밀번호 = 사용안함(공백)
@@ -740,6 +780,7 @@ class Kiwoom(QAxWidget):
         self.account_evaluation_req()
         for row in self.result:
             index = self._get_corp_index(row[0])
+            # 어제 남은 주식의 현재가가 예측가의 기준을 충족하지 못하면 매도
             if self.corp[index][2] < row[2] and row[4] > 0:
                 self.send_order(2, row[0], row[4], "", "02", "")
             else:
