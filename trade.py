@@ -68,7 +68,8 @@ class Kiwoom(QAxWidget):
     
     # 주식 구매 후 체결 관련 이벤트 수행
     def _receive_chejan_data(self, gubun, item_cnt, fid_list):
-        print(gubun)
+        if gubun != '0':
+            return
         code = self.get_chejan_data(9001)
         code = code[1:]
         ordernum = self.get_chejan_data(9203)
@@ -84,6 +85,7 @@ class Kiwoom(QAxWidget):
             paid = 0
         index = self._get_corp_index(code)
         self.corp[index][6] += paid
+        print(self.corp[index][1], "주식", self.corp[index][6], "개를 보유중입니다.")
         if not self.corp[index][7]:
             self.corp[index][7][ordernum] = notpaid
         elif ordernum not in self.corp[index][7].keys():
@@ -112,9 +114,10 @@ class Kiwoom(QAxWidget):
                 if row[6]:
                     if row[7]:
                         for order in row[7]: 
-                            self.send_order(3, row[0], row[7][order], 0, "03", order)
-                    else:
-                        self.send_order(3, row[0], row[6], 0, "02", "")
+                            self.send_order(3, row[0], row[7][order], "", "03", order)
+                            time.sleep(self.TR_REQ_TIME_INTERVAL)
+                    self.send_order(2, row[0], row[6], "", "03", "")
+                    time.sleep(self.TR_REQ_TIME_INTERVAL)
             self._exit_process()
             return
         price = self._get_comm_real_data(code, 10)
@@ -388,8 +391,12 @@ class Kiwoom(QAxWidget):
         print(date)
 
     def _opt10075(self, rqname, trcode):
-        notpurchased_vol = self._get_comm_data(trcode, rqname, 0, "미체결수량")
-        print(notpurchased_vol)
+        data_cnt = self._get_repeat_cnt(trcode, rqname)
+        for i in range(data_cnt):
+            code = self._get_comm_data(trcode, rqname, 0, "종목코드")
+            pay_number = self._get_comm_data(trcode, rqname, 0, "주문번호")
+            notpurchased_vol = self._get_comm_data(trcode, rqname, 0, "미체결수량")
+            self.result.append([code, notpurchased_vol, pay_number])
 
     def _opt10076(self, rqname, trcode):
         perchase_price = self._get_comm_data(trcode, rqname, 0, "체결가")
@@ -629,12 +636,22 @@ class Kiwoom(QAxWidget):
     # 	종목코드 = 전문 조회할 종목코드
     # 	체결구분 = 0:전체, 2:체결, 1:미체결
     def realtime_notperchased_req(self, stockall_flag, buysell_flag, code, contract_flag):
+        self.result = []
         self.set_input_value("계좌번호", self.account)
         self.set_input_value("전체종목구분", stockall_flag)
         self.set_input_value("매매구분", buysell_flag)
         self.set_input_value("종목코드", code)
         self.set_input_value("체결구분", contract_flag)
         self.comm_rq_data("opt10075_req", "opt10075", 0, "0114")
+
+        while self.remained_data == True:
+            time.sleep(self.TR_REQ_TIME_INTERVAL)
+            self.set_input_value("계좌번호", self.account)
+            self.set_input_value("전체종목구분", stockall_flag)
+            self.set_input_value("매매구분", buysell_flag)
+            self.set_input_value("종목코드", code)
+            self.set_input_value("체결구분", contract_flag)
+            self.comm_rq_data("opt10075_req", "opt10075", 2, "0114")
 
     #  [ opt10076 : 실시간체결요청 ]
     # 	종목코드 = 전문 조회할 종목코드
@@ -724,11 +741,20 @@ class Kiwoom(QAxWidget):
 #     상장폐지조회구분 = 0:전체, 1:상장폐지종목제외
 #     비밀번호입력매체구분 = 00
     def account_evaluation_req(self):
+        self.result = []
         self.set_input_value("계좌번호",  self.account)
         self.set_input_value("비밀번호",  "")
         self.set_input_value("상장폐지조회구분",  "0")
         self.set_input_value("비밀번호입력매체구분",  '00')
         self.comm_rq_data("opw00004_req", "opw00004", 0, "0119")
+
+        while self.remained_data == True:
+            time.sleep(self.TR_REQ_TIME_INTERVAL)
+            self.set_input_value("계좌번호",  self.account)
+            self.set_input_value("비밀번호",  "")
+            self.set_input_value("상장폐지조회구분",  "0")
+            self.set_input_value("비밀번호입력매체구분",  '00')
+            self.comm_rq_data("opw00004_req", "opw00004", 2, "0119")
 
 #  [ OPW00007 : 계좌별주문체결내역상세요청 ]
 # 	주문일자 = YYYYMMDD (20170101 연도4자리, 월 2자리, 일 2자리 형식)
@@ -782,14 +808,24 @@ class Kiwoom(QAxWidget):
             index = self._get_corp_index(row[0])
             # 어제 남은 주식의 현재가가 예측가의 기준을 충족하지 못하면 매도
             if self.corp[index][2] < row[2] and row[4] > 0:
-                self.send_order(2, row[0], row[4], "", "02", "")
+                self.send_order(2, row[0], row[4], "", "03", "")
+                print(self.corp[index][1], "잔량 매도")
+                time.sleep(self.TR_REQ_TIME_INTERVAL)
             else:
                 self.corp[index][6] = row[1]
                 if row[3] > 0:
                     self.corp[index][8] = row[3] * row[2]
+                    print(self.corp[index][1], self.corp[index][8], "원 치 보유 중입니다.")
+        self.realtime_notperchased_req("0", "0", "", "1")
+        for row in self.result:
+            index = self._get_corp_index(row[0])
+            self.corp[index][7][2] = [1]
+        
         
 
 if __name__ == "__main__":
+    if datetime.today().weekday()== 5 or datetime.today().weekday()== 6:
+        exit()
     app = QApplication(sys.argv)
     kiwoom = Kiwoom()
     #kiwoom 연결
